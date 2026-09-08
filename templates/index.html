@@ -205,6 +205,15 @@
             border-color: var(--verde);
             box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.2);
         }
+        
+        /* Badge de API */
+        .badge-api {
+            background: #6C3CE1;
+            color: white;
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+        }
     </style>
 </head>
 <body>
@@ -217,7 +226,7 @@
                 <h1><i class="fas fa-map-marked-alt me-2"></i>Rutas Turísticas de Coclé</h1>
                 <p class="subtitulo">
                     <i class="fas fa-route me-1"></i> 
-                    Optimización con algoritmo de Dijkstra · 29 atractivos · 7 días de itinerario
+                    Optimización con Dijkstra · 29 atractivos · <span class="badge-api">OpenRouteService</span>
                 </p>
             </div>
             <div class="col-md-4 text-md-end mt-3 mt-md-0">
@@ -440,7 +449,7 @@ function seleccionarCriterio(criterio) {
 }
 
 // ============================================================
-// CALCULAR RUTA
+// CALCULAR RUTA CON OPENROUTESERVICE
 // ============================================================
 async function calcularRuta() {
     const origen = document.getElementById('origenSelect').value;
@@ -455,7 +464,8 @@ async function calcularRuta() {
     document.getElementById('panelRuta').innerHTML = `
         <div class="text-center py-4">
             <div class="spinner-border text-success" role="status"></div>
-            <p class="mt-2">Calculando ruta óptima...</p>
+            <p class="mt-2">🔍 Consultando OpenRouteService...</p>
+            <small class="text-muted">Calculando ruta con OpenStreetMap</small>
         </div>
     `;
     
@@ -465,105 +475,126 @@ async function calcularRuta() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 origen: parseInt(origen),
-                destino: parseInt(destino),
-                criterio: criterioActual
+                destino: parseInt(destino)
             })
         });
         
         const data = await resp.json();
         
-        if (data.error) {
-            alert(data.error);
+        if (!data.exito) {
+            alert('❌ ' + (data.error || 'Error al calcular la ruta'));
             return;
         }
         
-        rutaActual = data.camino;
+        // Guardar ruta actual para la voz
+        rutaActual = [data.origen, data.destino];
+        
+        // Dibujar ruta
         dibujarRuta(data);
         actualizarEstadisticas(data);
         actualizarPanel(data);
         
     } catch (e) {
-        alert('Error al calcular la ruta');
+        alert('❌ Error al calcular la ruta');
         console.error(e);
     }
 }
 
+// ============================================================
+// DIBUJAR RUTA EN EL MAPA
+// ============================================================
 function dibujarRuta(data) {
-    // Limpiar ruta anterior
     if (rutaLayer) {
         mapa.removeLayer(rutaLayer);
     }
     
-    const coords = data.coordenadas;
-    
-    // Dibujar línea de la ruta
-    rutaLayer = L.polyline(coords, {
+    // Dibujar la ruta con los puntos de OpenRouteService
+    rutaLayer = L.polyline(data.puntos_ruta, {
         color: '#1D9E75',
-        weight: 5,
-        opacity: 0.8,
-        lineJoin: 'round'
+        weight: 6,
+        opacity: 0.9,
+        lineJoin: 'round',
+        smoothFactor: 1
     }).addTo(mapa);
     
-    // Agregar marcadores de pasos
-    coords.forEach((coord, i) => {
-        const esDestino = i === coords.length - 1;
-        const marker = L.marker(coord, {
-            icon: L.divIcon({
-                html: `<div style="background:${esDestino ? '#E74C3C' : '#1D9E75'};width:32px;height:32px;border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:11px;">${i+1}</div>`,
-                iconSize: [32, 32],
-                iconAnchor: [16, 16]
-            })
-        }).addTo(mapa);
-        
-        marker.bindPopup(`<strong>Paso ${i+1}</strong><br>${data.nodos[i].nombre}`);
+    // Marcador de origen
+    const origenIcon = L.divIcon({
+        html: `<div style="background:#2E86C1;width:36px;height:36px;border-radius:50%;border:3px solid white;box-shadow:0 2px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">O</div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
     });
     
-    // Ajustar vista al recorrido
-    mapa.fitBounds(rutaLayer.getBounds(), { padding: [50, 50] });
-}
-
-function actualizarEstadisticas(data) {
-    // Calcular distancias reales usando el grafo
-    let dist = 0, time = 0, cost = 0;
-    const camino = data.camino;
+    L.marker([data.nodo_origen.lat, data.nodo_origen.lng], { icon: origenIcon })
+        .addTo(mapa)
+        .bindPopup(`<strong>${data.nodo_origen.nombre}</strong><br>📍 ORIGEN`);
     
-    // Buscar las aristas entre nodos consecutivos
-    for (let i = 0; i < camino.length - 1; i++) {
-        const u = camino[i];
-        const v = camino[i+1];
-        // Buscar la arista en ARISTAS (simplificado)
-        const d = Math.round(Math.random() * 20 + 5);
-        dist += d;
-        time += Math.round(Math.random() * 25 + 10);
-        cost += d * 0.15;
+    // Marcador de destino
+    const destinoIcon = L.divIcon({
+        html: `<div style="background:#E74C3C;width:36px;height:36px;border-radius:50%;border:3px solid white;box-shadow:0 2px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">D</div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+    });
+    
+    L.marker([data.nodo_destino.lat, data.nodo_destino.lng], { icon: destinoIcon })
+        .addTo(mapa)
+        .bindPopup(`<strong>${data.nodo_destino.nombre}</strong><br>🏁 DESTINO`);
+    
+    // Ajustar vista
+    if (rutaLayer.getBounds().isValid()) {
+        mapa.fitBounds(rutaLayer.getBounds(), { padding: [60, 60] });
     }
-    
-    document.getElementById('totalDistancia').textContent = `${dist.toFixed(1)} km`;
-    document.getElementById('totalTiempo').textContent = `${time} min`;
-    document.getElementById('totalCosto').textContent = `$${cost.toFixed(2)}`;
-    document.getElementById('totalParadas').textContent = data.nodos.length;
 }
 
+// ============================================================
+// ACTUALIZAR ESTADÍSTICAS CON DATOS REALES
+// ============================================================
+function actualizarEstadisticas(data) {
+    document.getElementById('totalDistancia').textContent = `${data.distancia_km} km`;
+    document.getElementById('totalTiempo').textContent = `${data.tiempo_min} min`;
+    document.getElementById('totalCosto').textContent = `$${data.costo}`;
+    document.getElementById('totalParadas').textContent = '2';
+}
+
+// ============================================================
+// ACTUALIZAR PANEL CON INSTRUCCIONES
+// ============================================================
 function actualizarPanel(data) {
     const panel = document.getElementById('panelRuta');
     let html = `
         <h6 class="fw-bold text-success mb-3">
-            <i class="fas fa-route me-2"></i>Ruta Óptima
-            <small class="text-muted fw-normal"> (${criterioActual})</small>
+            <i class="fas fa-route me-2"></i>Ruta Calculada
+            <span class="badge bg-success ms-2">OpenRouteService</span>
         </h6>
+        <div class="mb-3">
+            <div class="d-flex justify-content-between">
+                <span><i class="fas fa-road text-success"></i> ${data.distancia_km} km</span>
+                <span><i class="fas fa-clock text-primary"></i> ${data.tiempo_min} min</span>
+                <span><i class="fas fa-dollar-sign text-warning"></i> $${data.costo}</span>
+            </div>
+        </div>
+        <div class="border-top pt-2">
+            <p class="mb-1"><strong>Origen:</strong> ${data.nodo_origen.nombre}</p>
+            <p class="mb-1"><strong>Destino:</strong> ${data.nodo_destino.nombre}</p>
+        </div>
     `;
     
-    data.nodos.forEach((nodo, i) => {
-        const esDestino = i === data.nodos.length - 1;
-        html += `
-            <div class="paso ${esDestino ? 'border-start border-danger border-3 ps-2' : ''}">
-                <span class="indice" style="background:${esDestino ? '#E74C3C' : '#1D9E75'}">${i+1}</span>
-                <span class="nombre">${nodo.nombre}</span>
-                <span class="codigo">${nodo.cod}</span>
-                ${esDestino ? '<span class="badge bg-danger ms-2">Destino</span>' : ''}
-            </div>
-        `;
-    });
+    // Agregar instrucciones si existen
+    if (data.instrucciones && data.instrucciones.length > 0) {
+        html += `<hr><small class="text-muted">Instrucciones:</small>`;
+        data.instrucciones.slice(0, 5).forEach((inst, i) => {
+            // Limpiar etiquetas HTML de las instrucciones
+            const textoLimpio = inst.replace(/<[^>]*>/g, '');
+            html += `
+                <div class="paso" style="background:#f8f9fa;margin-top:4px;padding:6px 12px;">
+                    <span class="indice" style="background:#6c757d;width:22px;height:22px;font-size:10px;">${i+1}</span>
+                    <span style="font-size:12px;">${textoLimpio}</span>
+                </div>
+            `;
+        });
+        if (data.instrucciones.length > 5) {
+            html += `<small class="text-muted">... y ${data.instrucciones.length - 5} pasos más</small>`;
+        }
+    }
     
     panel.innerHTML = html;
 }
@@ -594,17 +625,17 @@ function hablar() {
         return;
     }
     
-    // Construir mensaje
-    const nombres = rutaActual.map(id => ATRACTIVOS[id].nombre);
-    let mensaje = `Ruta turística por la provincia de Coclé, Panamá. `;
-    mensaje += `Comenzando en ${nombres[0]}. `;
+    // Obtener nombres de origen y destino
+    const origenId = rutaActual[0];
+    const destinoId = rutaActual[1];
+    const origenNombre = ATRACTIVOS[origenId].nombre;
+    const destinoNombre = ATRACTIVOS[destinoId].nombre;
     
-    for (let i = 1; i < nombres.length - 1; i++) {
-        mensaje += `Luego visita ${nombres[i]}. `;
-    }
+    // Obtener distancia de la interfaz
+    const distancia = document.getElementById('totalDistancia').textContent;
+    const tiempo = document.getElementById('totalTiempo').textContent;
     
-    mensaje += `Finalizando en ${nombres[nombres.length - 1]}. `;
-    mensaje += `${nombres.length} atractivos visitados en total. ¡Disfruta tu viaje!`;
+    const mensaje = `Ruta turística por la provincia de Coclé, Panamá. Desde ${origenNombre} hasta ${destinoNombre}. Distancia aproximada de ${distancia}. Tiempo estimado de ${tiempo}. ¡Disfruta tu viaje!`;
     
     const utterance = new SpeechSynthesisUtterance(mensaje);
     utterance.lang = 'es-PA';
