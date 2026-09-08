@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, jsonify
 import requests
 import heapq
 import math
-import time
 
 app = Flask(__name__)
 
@@ -10,30 +9,13 @@ app = Flask(__name__)
 # CONFIGURACIÓN
 # ============================================================
 
-OSRM_BASE_URL = "https://router.project-osrm.org"
-
-# Costo estimado utilizado en el proyecto:
-# USD 0.15 por kilómetro
-COSTO_POR_KM = 0.15
-
-# Tiempo máximo de espera para OSRM
-TIMEOUT_OSRM = 40
+OSRM_URL = "https://router.project-osrm.org"
 
 # ============================================================
 # ATRACTIVOS TURÍSTICOS
 # ============================================================
-#
-# IMPORTANTE:
-# Las coordenadas representan el punto geográfico utilizado
-# por la plataforma.
-#
-# OSRM posteriormente busca el segmento vial más cercano
-# mediante el servicio Nearest.
-#
-# ============================================================
 
 ATRACTIVOS = {
-
     1: {
         "nombre": "Playa Santa Clara",
         "cod": "PSC",
@@ -269,43 +251,16 @@ ATRACTIVOS = {
 
 
 # ============================================================
-# VARIABLES GLOBALES DEL GRAFO
+# DISTANCIA GEOGRÁFICA AUXILIAR
 # ============================================================
-
-GRAFO = {}
-
-MATRIZ_DISTANCIAS = {}
-MATRIZ_TIEMPOS = {}
-
-PUNTOS_AJUSTADOS = {}
-
-GRAFO_CARGADO = False
-
-
-# ============================================================
-# FUNCIONES AUXILIARES
-# ============================================================
-
-def validar_id_atractivo(id_atractivo):
-    """
-    Comprueba que el ID exista.
-    """
-
-    try:
-        id_atractivo = int(id_atractivo)
-    except Exception:
-        return False
-
-    return id_atractivo in ATRACTIVOS
-
 
 def distancia_haversine(lat1, lon1, lat2, lon2):
     """
-    Distancia geográfica aproximada entre dos coordenadas.
-    Se utiliza únicamente como referencia.
+    Calcula la distancia aproximada entre dos coordenadas
+    utilizando la fórmula de Haversine.
     """
 
-    radio = 6371.0
+    radio_tierra = 6371.0
 
     lat1 = math.radians(lat1)
     lat2 = math.radians(lat2)
@@ -321,29 +276,19 @@ def distancia_haversine(lat1, lon1, lat2, lon2):
         * math.sin(diferencia_lon / 2) ** 2
     )
 
-    c = 2 * math.atan2(
-        math.sqrt(a),
-        math.sqrt(1 - a)
-    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-    return radio * c
+    return radio_tierra * c
 
 
 # ============================================================
-# OSRM - NEAREST
+# OBTENER PUNTO MÁS CERCANO A UNA CARRETERA
 # ============================================================
 
 def obtener_punto_carretera(lat, lng):
-    """
-    Ajusta una coordenada al segmento vial más cercano
-    utilizando el servicio Nearest de OSRM.
-
-    OSRM devuelve las coordenadas como:
-    [longitud, latitud]
-    """
 
     url = (
-        f"{OSRM_BASE_URL}/nearest/v1/driving/"
+        f"{OSRM_URL}/nearest/v1/driving/"
         f"{lng},{lat}"
     )
 
@@ -353,448 +298,421 @@ def obtener_punto_carretera(lat, lng):
 
     try:
 
-        response = requests.get(
+        respuesta = requests.get(
             url,
             params=params,
-            timeout=TIMEOUT_OSRM
+            timeout=30
         )
 
-        if response.status_code != 200:
+        data = respuesta.json()
+
+        if respuesta.status_code == 200 and data.get("code") == "Ok":
+
+            waypoint = data["waypoints"][0]
+
+            coordenadas = waypoint["location"]
+
             return {
-                "exito": False,
-                "error": f"OSRM HTTP {response.status_code}"
+                "lng": coordenadas[0],
+                "lat": coordenadas[1],
+                "indice": waypoint.get("waypoint_index"),
+                "exito": True
             }
 
-        data = response.json()
+        return {
+            "exito": False,
+            "error": data.get(
+                "message",
+                "No se encontró una carretera cercana."
+            )
+        }
+
+    except Exception as e:
+
+        return {
+            "exito": False,
+            "error": str(e)
+        }
+
+
+# ============================================================
+# AJUSTAR TODOS LOS NODOS A LA RED VIAL
+# ============================================================
+
+def ajustar_puntos_a_carreteras():
+
+    puntos_ajustados = {}
+
+    for nodo_id, atractivo in ATRACTIVOS.items():
+
+        resultado = obtener_punto_carretera(
+            atractivo["lat"],
+            atractivo["lng"]
+        )
+
+        if resultado["exito"]:
+
+            puntos_ajustados[nodo_id] = {
+                **atractivo,
+                "lat_original": atractivo["lat"],
+                "lng_original": atractivo["lng"],
+                "lat": resultado["lat"],
+                "lng": resultado["lng"]
+            }
+
+        else:
+
+            puntos_ajustados[nodo_id] = {
+                **atractivo,
+                "lat_original": atractivo["lat"],
+                "lng_original": atractivo["lng"]
+            }
+
+    return puntos_ajustados
+
+
+# ============================================================
+# OBTENER RUTA ENTRE DOS PUNTOS
+# ============================================================
+
+def obtener_ruta_osrm(
+    origen_lat,
+    origen_lng,
+    destino_lat,
+    destino_lng
+):
+
+    url = (
+        f"{OSRM_URL}/route/v1/driving/"
+        f"{origen_lng},{origen_lat};"
+        f"{destino_lng},{destino_lat}"
+    )
+
+    params = {
+        "overview": "full",
+        "geometries": "geojson",
+        "steps": "true"
+    }
+
+    try:
+
+        respuesta = requests.get(
+            url,
+            params=params,
+            timeout=30
+        )
+
+        data = respuesta.json()
+
+        if respuesta.status_code != 200:
+            return {
+                "exito": False,
+                "error": data.get(
+                    "message",
+                    "Error en OSRM."
+                )
+            }
 
         if data.get("code") != "Ok":
             return {
                 "exito": False,
                 "error": data.get(
                     "message",
-                    "OSRM no encontró una carretera."
+                    "No se pudo calcular la ruta."
                 )
             }
 
-        waypoints = data.get("waypoints", [])
+        ruta = data["routes"][0]
 
-        if not waypoints:
-            return {
-                "exito": False,
-                "error": "No se encontró un segmento vial cercano."
-            }
+        distancia_km = ruta["distance"] / 1000
+        tiempo_min = ruta["duration"] / 60
 
-        waypoint = waypoints[0]
+        # ====================================================
+        # COSTO
+        # ====================================================
+        # Costo estimado de operación:
+        # $0.15 por kilómetro.
+        # ====================================================
 
-        location = waypoint.get("location")
+        costo = distancia_km * 0.15
 
-        if not location or len(location) != 2:
-            return {
-                "exito": False,
-                "error": "OSRM devolvió una ubicación inválida."
-            }
+        geometria = ruta["geometry"]["coordinates"]
 
-        snapped_lng = location[0]
-        snapped_lat = location[1]
+        puntos_ruta = [
+            [coordenada[1], coordenada[0]]
+            for coordenada in geometria
+        ]
 
-        distancia = waypoint.get("distance", 0)
+        instrucciones = []
 
-        return {
-            "exito": True,
-            "lat": snapped_lat,
-            "lng": snapped_lng,
-            "distancia_m": round(distancia, 2),
-            "nombre_carretera": waypoint.get("name", "")
-        }
+        for tramo in ruta.get("legs", []):
 
-    except requests.exceptions.Timeout:
+            for paso in tramo.get("steps", []):
 
-        return {
-            "exito": False,
-            "error": "Tiempo de espera agotado al consultar OSRM."
-        }
+                maneuver = paso.get("maneuver", {})
 
-    except requests.exceptions.RequestException as e:
+                instruction = maneuver.get("instruction")
+
+                if instruction:
+                    instrucciones.append(instruction)
 
         return {
-            "exito": False,
-            "error": f"Error de conexión con OSRM: {str(e)}"
+
+            "distancia_km": round(distancia_km, 2),
+            "tiempo_min": round(tiempo_min),
+            "costo": round(costo, 2),
+            "puntos_ruta": puntos_ruta,
+            "instrucciones": instrucciones,
+            "exito": True
         }
 
     except Exception as e:
 
         return {
             "exito": False,
-            "error": f"Error inesperado: {str(e)}"
+            "error": str(e)
         }
 
 
 # ============================================================
-# AJUSTAR TODOS LOS ATRACTIVOS A LA RED VIAL
+# CONSTRUIR MATRIZ DE DISTANCIAS Y TIEMPOS
 # ============================================================
 
-def ajustar_puntos_a_carreteras():
-    """
-    Busca el segmento vial más cercano para cada atractivo.
+def construir_matriz_osrm(puntos):
 
-    Se ejecuta una sola vez y guarda los resultados en memoria.
-    """
+    ids = list(puntos.keys())
 
-    global PUNTOS_AJUSTADOS
-
-    print("\n==============================================")
-    print("AJUSTANDO ATRACTIVOS A LA RED VIAL DE OSRM")
-    print("==============================================\n")
-
-    PUNTOS_AJUSTADOS = {}
-
-    for id_atractivo, lugar in ATRACTIVOS.items():
-
-        resultado = obtener_punto_carretera(
-            lugar["lat"],
-            lugar["lng"]
-        )
-
-        if resultado["exito"]:
-
-            PUNTOS_AJUSTADOS[id_atractivo] = {
-                "lat": resultado["lat"],
-                "lng": resultado["lng"],
-                "distancia_m": resultado["distancia_m"],
-                "nombre_carretera": resultado.get(
-                    "nombre_carretera",
-                    ""
-                )
-            }
-
-            print(
-                f"OK {id_atractivo:02d} "
-                f"{lugar['nombre']} "
-                f"-> {resultado['distancia_m']} m"
-            )
-
-        else:
-
-            # Si Nearest falla, conservamos la coordenada original.
-            PUNTOS_AJUSTADOS[id_atractivo] = {
-                "lat": lugar["lat"],
-                "lng": lugar["lng"],
-                "distancia_m": None,
-                "nombre_carretera": "",
-                "advertencia": resultado["error"]
-            }
-
-            print(
-                f"ADVERTENCIA {id_atractivo:02d} "
-                f"{lugar['nombre']} "
-                f"-> {resultado['error']}"
-            )
-
-        # Pequeña pausa para evitar consultas excesivamente rápidas.
-        time.sleep(0.05)
-
-
-# ============================================================
-# OSRM - TABLE
-# ============================================================
-
-def construir_matriz_osrm():
-    """
-    Obtiene una matriz de distancia y tiempo entre los 29 atractivos.
-
-    OSRM Table es adecuado para problemas de optimización porque
-    devuelve matrices de duración y distancia entre múltiples
-    ubicaciones.
-    """
-
-    global MATRIZ_DISTANCIAS
-    global MATRIZ_TIEMPOS
-
-    ids = sorted(ATRACTIVOS.keys())
-
-    coordenadas = []
-
-    for id_atractivo in ids:
-
-        punto = PUNTOS_AJUSTADOS.get(id_atractivo)
-
-        if punto:
-
-            coordenadas.append(
-                f"{punto['lng']},{punto['lat']}"
-            )
-
-        else:
-
-            lugar = ATRACTIVOS[id_atractivo]
-
-            coordenadas.append(
-                f"{lugar['lng']},{lugar['lat']}"
-            )
-
-    coordenadas_string = ";".join(coordenadas)
+    coordenadas = ";".join(
+        f"{puntos[nodo]['lng']},{puntos[nodo]['lat']}"
+        for nodo in ids
+    )
 
     url = (
-        f"{OSRM_BASE_URL}/table/v1/driving/"
-        f"{coordenadas_string}"
+        f"{OSRM_URL}/table/v1/driving/"
+        f"{coordenadas}"
     )
 
     params = {
-        "annotations": "distance,duration"
+        "annotations": "duration,distance"
     }
-
-    print("\n==============================================")
-    print("CONSTRUYENDO MATRIZ OSRM")
-    print("==============================================\n")
 
     try:
 
-        response = requests.get(
+        respuesta = requests.get(
             url,
             params=params,
-            timeout=TIMEOUT_OSRM
+            timeout=60
         )
 
-        if response.status_code != 200:
+        data = respuesta.json()
 
-            raise RuntimeError(
-                f"OSRM HTTP {response.status_code}"
+        if respuesta.status_code != 200:
+            raise Exception(
+                data.get(
+                    "message",
+                    "Error al construir matriz OSRM."
+                )
             )
 
-        data = response.json()
-
         if data.get("code") != "Ok":
-
-            raise RuntimeError(
+            raise Exception(
                 data.get(
                     "message",
                     "OSRM no pudo construir la matriz."
                 )
             )
 
-        distancias = data.get("distances")
-        duraciones = data.get("durations")
+        matriz_distancia = data["distances"]
+        matriz_tiempo = data["durations"]
 
-        if not distancias or not duraciones:
-
-            raise RuntimeError(
-                "OSRM no devolvió distancias o duraciones."
-            )
-
-        MATRIZ_DISTANCIAS = {}
-        MATRIZ_TIEMPOS = {}
-
-        for i, id_origen in enumerate(ids):
-
-            MATRIZ_DISTANCIAS[id_origen] = {}
-            MATRIZ_TIEMPOS[id_origen] = {}
-
-            for j, id_destino in enumerate(ids):
-
-                distancia = distancias[i][j]
-                duracion = duraciones[i][j]
-
-                MATRIZ_DISTANCIAS[id_origen][id_destino] = (
-                    distancia
-                )
-
-                MATRIZ_TIEMPOS[id_origen][id_destino] = (
-                    duracion
-                )
-
-        print(
-            f"OK. Matriz construida: "
-            f"{len(ids)} x {len(ids)}"
-        )
-
-        return True
+        return ids, matriz_distancia, matriz_tiempo
 
     except Exception as e:
 
-        print(
-            "ERROR construyendo matriz OSRM:",
-            e
-        )
+        print("Error construyendo matriz:", e)
 
-        MATRIZ_DISTANCIAS = {}
-        MATRIZ_TIEMPOS = {}
-
-        return False
+        return None, None, None
 
 
 # ============================================================
 # CONSTRUIR GRAFO
 # ============================================================
 
-def construir_grafo():
-    """
-    Construye un grafo dirigido.
+def construir_grafo(puntos):
 
-    Cada atractivo es un nodo.
-
-    Cada conexión contiene:
-
-    - distancia
-    - tiempo
-    - costo
-    """
-
-    global GRAFO
-
-    GRAFO = {}
-
-    ids = sorted(ATRACTIVOS.keys())
-
-    for id_origen in ids:
-
-        GRAFO[id_origen] = {}
-
-        for id_destino in ids:
-
-            if id_origen == id_destino:
-                continue
-
-            distancia_m = (
-                MATRIZ_DISTANCIAS
-                .get(id_origen, {})
-                .get(id_destino)
-            )
-
-            tiempo_s = (
-                MATRIZ_TIEMPOS
-                .get(id_origen, {})
-                .get(id_destino)
-            )
-
-            # Algunas combinaciones pueden no tener ruta.
-            if distancia_m is None or tiempo_s is None:
-                continue
-
-            distancia_km = distancia_m / 1000.0
-            tiempo_min = tiempo_s / 60.0
-            costo = distancia_km * COSTO_POR_KM
-
-            GRAFO[id_origen][id_destino] = {
-
-                "distancia_km": distancia_km,
-
-                "tiempo_min": tiempo_min,
-
-                "costo": costo
-            }
-
-    print(
-        f"Grafo construido con "
-        f"{len(GRAFO)} nodos."
+    ids, matriz_distancia, matriz_tiempo = construir_matriz_osrm(
+        puntos
     )
 
+    if ids is None:
+        return {}
+
+    grafo = {}
+
+    for i, nodo_origen in enumerate(ids):
+
+        grafo[nodo_origen] = {}
+
+        for j, nodo_destino in enumerate(ids):
+
+            if i == j:
+                continue
+
+            distancia_metros = matriz_distancia[i][j]
+            tiempo_segundos = matriz_tiempo[i][j]
+
+            if distancia_metros is None or tiempo_segundos is None:
+                continue
+
+            distancia_km = distancia_metros / 1000
+
+            tiempo_min = tiempo_segundos / 60
+
+            costo = distancia_km * 0.15
+
+            grafo[nodo_origen][nodo_destino] = {
+
+                "distancia_km": round(
+                    distancia_km,
+                    2
+                ),
+
+                "tiempo_min": round(
+                    tiempo_min,
+                    2
+                ),
+
+                "costo": round(
+                    costo,
+                    2
+                )
+            }
+
+    return grafo
+
 
 # ============================================================
-# PREPARAR SISTEMA
+# PREPARAR GRAFO
 # ============================================================
+
+GRAFO = {}
+PUNTOS_AJUSTADOS = {}
 
 def preparar_grafo():
 
-    global GRAFO_CARGADO
+    global GRAFO
+    global PUNTOS_AJUSTADOS
 
-    if GRAFO_CARGADO:
-        return True
+    print("Preparando red vial...")
 
-    print("\n")
-    print("==============================================")
-    print("INICIANDO SISTEMA DE RUTAS TURÍSTICAS")
-    print("==============================================")
+    PUNTOS_AJUSTADOS = ajustar_puntos_a_carreteras()
 
-    ajustar_puntos_a_carreteras()
+    print("Construyendo matriz de rutas...")
 
-    matriz_ok = construir_matriz_osrm()
+    GRAFO = construir_grafo(
+        PUNTOS_AJUSTADOS
+    )
 
-    if not matriz_ok:
-
-        print(
-            "No fue posible construir la matriz OSRM."
-        )
-
-        return False
-
-    construir_grafo()
-
-    GRAFO_CARGADO = True
-
-    print("==============================================")
-    print("GRAFO LISTO")
-    print("==============================================\n")
-
-    return True
+    print(
+        f"Grafo construido con {len(GRAFO)} nodos."
+    )
 
 
 # ============================================================
 # DIJKSTRA
 # ============================================================
 
-def dijkstra(origen, destino, criterio="distancia"):
-    """
-    Algoritmo de Dijkstra.
+def dijkstra(grafo, origen, destino, criterio):
 
-    criterio:
-        distancia
-        tiempo
-        costo
-    """
+    # ========================================================
+    # CORRECCIÓN PRINCIPAL
+    # ========================================================
+    #
+    # El frontend envía:
+    #
+    # distancia
+    # tiempo
+    # costo
+    #
+    # Pero las aristas contienen:
+    #
+    # distancia_km
+    # tiempo_min
+    # costo
+    #
+    # Por eso hacemos esta correspondencia.
+    # ========================================================
 
-    if origen not in GRAFO:
-        return None
+    pesos = {
 
-    if destino not in GRAFO:
-        return None
+        "distancia": "distancia_km",
 
-    if criterio not in (
-        "distancia",
-        "tiempo",
-        "costo"
-    ):
-        criterio = "distancia"
+        "tiempo": "tiempo_min",
+
+        "costo": "costo"
+    }
+
+    if criterio not in pesos:
+
+        criterio = "tiempo"
+
+    campo_peso = pesos[criterio]
+
+    # ========================================================
+    # Inicialización
+    # ========================================================
 
     distancias = {
         nodo: float("inf")
-        for nodo in GRAFO
+        for nodo in grafo
     }
 
     anteriores = {
         nodo: None
-        for nodo in GRAFO
+        for nodo in grafo
     }
 
     distancias[origen] = 0
 
-    cola = [
+    cola_prioridad = [
         (0, origen)
     ]
 
-    visitados = set()
+    # ========================================================
+    # ALGORITMO DE DIJKSTRA
+    # ========================================================
 
-    while cola:
+    while cola_prioridad:
 
         distancia_actual, nodo_actual = heapq.heappop(
-            cola
+            cola_prioridad
         )
 
-        if nodo_actual in visitados:
+        if distancia_actual > distancias[nodo_actual]:
             continue
-
-        visitados.add(nodo_actual)
 
         if nodo_actual == destino:
             break
 
-        vecinos = GRAFO.get(
+        vecinos = grafo.get(
             nodo_actual,
             {}
         )
 
         for vecino, datos in vecinos.items():
 
-            peso = datos[criterio]
+            # ================================================
+            # CORRECCIÓN:
+            # antes estaba:
+            #
+            # peso = datos[criterio]
+            #
+            # ahora usamos:
+            #
+            # peso = datos[campo_peso]
+            # ================================================
+
+            peso = datos[campo_peso]
 
             nueva_distancia = (
                 distancia_actual + peso
@@ -807,119 +725,71 @@ def dijkstra(origen, destino, criterio="distancia"):
                 anteriores[vecino] = nodo_actual
 
                 heapq.heappush(
-                    cola,
+                    cola_prioridad,
                     (
                         nueva_distancia,
                         vecino
                     )
                 )
 
-    if distancias[destino] == float("inf"):
+    # ========================================================
+    # VERIFICAR SI EXISTE CAMINO
+    # ========================================================
+
+    if distancias.get(destino, float("inf")) == float("inf"):
+
         return None
 
-    # Reconstruir camino
+    # ========================================================
+    # RECONSTRUIR CAMINO
+    # ========================================================
+
     camino = []
 
-    actual = destino
+    nodo = destino
 
-    while actual is not None:
+    while nodo is not None:
 
-        camino.append(actual)
+        camino.append(nodo)
 
-        actual = anteriores[actual]
+        nodo = anteriores[nodo]
 
     camino.reverse()
-
-    # Calcular totales reales
-    distancia_total = 0
-    tiempo_total = 0
-    costo_total = 0
-
-    tramos = []
-
-    for i in range(len(camino) - 1):
-
-        a = camino[i]
-        b = camino[i + 1]
-
-        datos = GRAFO[a][b]
-
-        distancia_total += datos["distancia_km"]
-        tiempo_total += datos["tiempo_min"]
-        costo_total += datos["costo"]
-
-        tramos.append({
-            "origen": a,
-            "destino": b,
-            "distancia_km": datos["distancia_km"],
-            "tiempo_min": datos["tiempo_min"],
-            "costo": datos["costo"]
-        })
 
     return {
 
         "camino": camino,
 
-        "criterio": criterio,
+        "peso_total": round(
+            distancias[destino],
+            2
+        ),
 
-        "peso_total": distancias[destino],
-
-        "distancia_km": distancia_total,
-
-        "tiempo_min": tiempo_total,
-
-        "costo": costo_total,
-
-        "tramos": tramos
+        "criterio": criterio
     }
 
 
 # ============================================================
-# OBTENER GEOMETRÍA DE UNA RUTA
+# OBTENER GEOMETRÍA COMPLETA DEL CAMINO
 # ============================================================
 
-def obtener_geometria_ruta(camino):
-    """
-    Obtiene la geometría vial correspondiente al camino
-    seleccionado por Dijkstra.
-    """
+def obtener_geometria_camino(camino):
 
     if not camino or len(camino) < 2:
 
-        return {
-            "exito": False,
-            "error": "El camino no contiene suficientes nodos."
-        }
+        return []
 
-    coordenadas = []
+    coordenadas = ";".join(
 
-    for id_atractivo in camino:
+        f"{PUNTOS_AJUSTADOS[nodo]['lng']},"
+        f"{PUNTOS_AJUSTADOS[nodo]['lat']}"
 
-        punto = PUNTOS_AJUSTADOS.get(
-            id_atractivo
-        )
-
-        if not punto:
-
-            lugar = ATRACTIVOS[id_atractivo]
-
-            coordenadas.append(
-                f"{lugar['lng']},{lugar['lat']}"
-            )
-
-        else:
-
-            coordenadas.append(
-                f"{punto['lng']},{punto['lat']}"
-            )
-
-    coordenadas_string = ";".join(
-        coordenadas
+        for nodo in camino
     )
 
     url = (
-        f"{OSRM_BASE_URL}/route/v1/driving/"
-        f"{coordenadas_string}"
+        f"{OSRM_URL}/route/v1/driving/"
+        f"{coordenadas}"
     )
 
     params = {
@@ -928,132 +798,46 @@ def obtener_geometria_ruta(camino):
 
         "geometries": "geojson",
 
-        "steps": "true",
-
-        "alternatives": "false"
+        "steps": "true"
     }
 
     try:
 
-        response = requests.get(
+        respuesta = requests.get(
             url,
             params=params,
-            timeout=TIMEOUT_OSRM
+            timeout=60
         )
 
-        if response.status_code != 200:
+        data = respuesta.json()
 
-            return {
-                "exito": False,
-                "error": (
-                    f"OSRM HTTP "
-                    f"{response.status_code}"
-                )
-            }
-
-        data = response.json()
+        if respuesta.status_code != 200:
+            return []
 
         if data.get("code") != "Ok":
+            return []
 
-            return {
-                "exito": False,
-                "error": data.get(
-                    "message",
-                    "OSRM no encontró la geometría."
-                )
-            }
+        ruta = data["routes"][0]
 
-        route = data["routes"][0]
+        geometria = ruta["geometry"]["coordinates"]
 
-        geometria = route["geometry"]["coordinates"]
-
-        puntos_ruta = [
+        return [
             [coord[1], coord[0]]
             for coord in geometria
         ]
 
-        instrucciones = []
-
-        for leg in route.get("legs", []):
-
-            for step in leg.get("steps", []):
-
-                maneuver = step.get(
-                    "maneuver",
-                    {}
-                )
-
-                tipo = maneuver.get(
-                    "type",
-                    ""
-                )
-
-                modifier = maneuver.get(
-                    "modifier",
-                    ""
-                )
-
-                nombre = step.get(
-                    "name",
-                    ""
-                )
-
-                if tipo == "depart":
-
-                    texto = "Iniciar recorrido"
-
-                elif tipo == "arrive":
-
-                    texto = "Llegar al destino"
-
-                elif tipo == "turn":
-
-                    if modifier:
-                        texto = (
-                            f"Girar {modifier}"
-                        )
-                    else:
-                        texto = "Realizar giro"
-
-                elif tipo == "roundabout":
-
-                    texto = "Entrar en la rotonda"
-
-                elif tipo == "merge":
-
-                    texto = "Incorporarse a la vía"
-
-                else:
-
-                    texto = tipo.capitalize()
-
-                if nombre:
-
-                    texto += f" por {nombre}"
-
-                instrucciones.append(
-                    texto
-                )
-
-        return {
-
-            "exito": True,
-
-            "puntos_ruta": puntos_ruta,
-
-            "instrucciones": instrucciones
-        }
-
     except Exception as e:
 
-        return {
-            "exito": False,
-            "error": str(e)
-        }
+        print(
+            "Error obteniendo geometría:",
+            e
+        )
+
+        return []
 
 
 # ============================================================
-# RUTA PRINCIPAL
+# RUTA DIRECTA OSRM
 # ============================================================
 
 @app.route("/")
@@ -1066,7 +850,7 @@ def index():
 
 
 # ============================================================
-# API RUTA + DIJKSTRA
+# API PRINCIPAL DE DIJKSTRA
 # ============================================================
 
 @app.route(
@@ -1079,334 +863,319 @@ def api_ruta():
 
         data = request.get_json()
 
-        if not data:
-
-            return jsonify({
-                "exito": False,
-                "error": "No se recibieron datos."
-            }), 400
-
         origen = int(
-            data.get("origen")
+            data["origen"]
         )
 
         destino = int(
-            data.get("destino")
+            data["destino"]
         )
 
         criterio = data.get(
             "criterio",
-            "distancia"
+            "tiempo"
         )
 
-        if not validar_id_atractivo(origen):
+        # ====================================================
+        # VALIDAR NODOS
+        # ====================================================
+
+        if origen not in ATRACTIVOS:
 
             return jsonify({
+
                 "exito": False,
-                "error": "El origen no existe."
+
+                "error":
+                "El nodo de origen no existe."
+
             }), 400
 
-        if not validar_id_atractivo(destino):
+        if destino not in ATRACTIVOS:
 
             return jsonify({
+
                 "exito": False,
-                "error": "El destino no existe."
+
+                "error":
+                "El nodo de destino no existe."
+
             }), 400
 
         if origen == destino:
 
             return jsonify({
+
                 "exito": False,
-                "error": (
-                    "El origen y el destino "
-                    "deben ser diferentes."
-                )
+
+                "error":
+                "El origen y destino no pueden ser iguales."
+
             }), 400
 
-        if criterio not in (
-            "distancia",
-            "tiempo",
-            "costo"
-        ):
+        # ====================================================
+        # ASEGURAR QUE EL GRAFO ESTÉ PREPARADO
+        # ====================================================
 
-            criterio = "distancia"
+        if not GRAFO:
 
-        # Preparar grafo
-        if not preparar_grafo():
+            preparar_grafo()
 
-            return jsonify({
-                "exito": False,
-                "error": (
-                    "No fue posible preparar "
-                    "el grafo de rutas."
-                )
-            }), 500
+        # ====================================================
+        # EJECUTAR DIJKSTRA
+        # ====================================================
 
-        # Ejecutar Dijkstra
-        resultado = dijkstra(
+        resultado_dijkstra = dijkstra(
+
+            GRAFO,
+
             origen,
+
             destino,
+
             criterio
         )
 
-        if not resultado:
+        if resultado_dijkstra is None:
 
             return jsonify({
+
                 "exito": False,
-                "error": (
-                    "No existe una ruta disponible "
-                    "entre los nodos seleccionados."
-                )
+
+                "error":
+                "No se encontró un camino entre los nodos seleccionados."
+
             }), 404
 
-        # Obtener geometría
-        geometria = obtener_geometria_ruta(
-            resultado["camino"]
+        camino = resultado_dijkstra[
+            "camino"
+        ]
+
+        # ====================================================
+        # GEOMETRÍA DE LA RUTA
+        # ====================================================
+
+        puntos_ruta = obtener_geometria_camino(
+            camino
         )
 
-        if not geometria["exito"]:
+        # ====================================================
+        # CALCULAR DATOS TOTALES
+        # ====================================================
 
-            return jsonify({
-                "exito": False,
-                "error": geometria["error"]
-            }), 500
+        distancia_total = 0
 
-        camino = resultado["camino"]
+        tiempo_total = 0
+
+        costo_total = 0
+
+        segmentos = []
+
+        for i in range(
+            len(camino) - 1
+        ):
+
+            nodo_a = camino[i]
+
+            nodo_b = camino[i + 1]
+
+            datos_segmento = GRAFO[
+                nodo_a
+            ][
+                nodo_b
+            ]
+
+            distancia_total += (
+                datos_segmento[
+                    "distancia_km"
+                ]
+            )
+
+            tiempo_total += (
+                datos_segmento[
+                    "tiempo_min"
+                ]
+            )
+
+            costo_total += (
+                datos_segmento[
+                    "costo"
+                ]
+            )
+
+            segmentos.append({
+
+                "origen": nodo_a,
+
+                "destino": nodo_b,
+
+                "distancia_km":
+                datos_segmento[
+                    "distancia_km"
+                ],
+
+                "tiempo_min":
+                datos_segmento[
+                    "tiempo_min"
+                ],
+
+                "costo":
+                datos_segmento[
+                    "costo"
+                ]
+            })
+
+        # ====================================================
+        # NODOS DEL CAMINO
+        # ====================================================
 
         nodos_ruta = []
 
-        for posicion, id_nodo in enumerate(
-            camino,
-            start=1
-        ):
+        for nodo in camino:
 
-            nodo = dict(
-                ATRACTIVOS[id_nodo]
-            )
+            nodos_ruta.append({
 
-            nodo["orden"] = posicion
+                "id": nodo,
 
-            punto = PUNTOS_AJUSTADOS.get(
-                id_nodo
-            )
+                **ATRACTIVOS[nodo],
 
-            if punto:
+                "lat_ruta":
+                PUNTOS_AJUSTADOS[nodo][
+                    "lat"
+                ],
 
-                nodo["lat_carretera"] = (
-                    punto["lat"]
-                )
+                "lng_ruta":
+                PUNTOS_AJUSTADOS[nodo][
+                    "lng"
+                ]
+            })
 
-                nodo["lng_carretera"] = (
-                    punto["lng"]
-                )
-
-                nodo["distancia_carretera_m"] = (
-                    punto.get("distancia_m")
-                )
-
-            nodos_ruta.append(nodo)
+        # ====================================================
+        # RESPUESTA
+        # ====================================================
 
         return jsonify({
 
             "exito": True,
 
-            "algoritmo": "Dijkstra",
-
-            "criterio": criterio,
-
-            "criterio_nombre": {
-                "distancia": "Distancia mínima",
-                "tiempo": "Tiempo mínimo",
-                "costo": "Costo mínimo"
-            }[criterio],
-
             "origen": origen,
 
             "destino": destino,
 
-            "nodo_origen": ATRACTIVOS[origen],
-
-            "nodo_destino": ATRACTIVOS[destino],
+            "criterio": criterio,
 
             "camino": camino,
 
             "nodos_ruta": nodos_ruta,
 
-            "distancia_km": round(
-                resultado["distancia_km"],
+            "distancia_km":
+            round(
+                distancia_total,
                 2
             ),
 
-            "tiempo_min": round(
-                resultado["tiempo_min"]
+            "tiempo_min":
+            round(
+                tiempo_total
             ),
 
-            "costo": round(
-                resultado["costo"],
+            "costo":
+            round(
+                costo_total,
                 2
             ),
 
-            "peso_total": round(
-                resultado["peso_total"],
-                4
-            ),
+            "puntos_ruta":
+            puntos_ruta,
 
-            "tramos": resultado["tramos"],
+            "segmentos":
+            segmentos,
 
-            "puntos_ruta": (
-                geometria["puntos_ruta"]
-            ),
+            "nodos_visitados":
+            len(camino)
 
-            "instrucciones": (
-                geometria["instrucciones"]
-            )
         })
 
     except Exception as e:
 
         print(
-            "ERROR /api/ruta:",
+            "ERROR API RUTA:",
             e
         )
 
         return jsonify({
+
             "exito": False,
+
             "error": str(e)
+
         }), 500
 
 
 # ============================================================
-# API PARA VERIFICAR COORDENADAS
+# API PARA COORDENADAS
 # ============================================================
 
 @app.route(
-    "/api/coordenadas",
-    methods=["GET"]
+    "/api/coordenadas"
 )
 def api_coordenadas():
 
-    if not preparar_grafo():
+    if not PUNTOS_AJUSTADOS:
 
-        return jsonify({
-            "exito": False,
-            "error": "No se pudieron preparar las coordenadas."
-        }), 500
+        preparar_grafo()
 
-    resultado = []
+    resultado = {}
 
-    for id_atractivo, lugar in ATRACTIVOS.items():
+    for nodo, datos in PUNTOS_AJUSTADOS.items():
 
-        punto = PUNTOS_AJUSTADOS.get(
-            id_atractivo,
-            {}
-        )
+        resultado[nodo] = {
 
-        elemento = dict(lugar)
+            "nombre":
+            datos["nombre"],
 
-        elemento["id"] = id_atractivo
+            "cod":
+            datos["cod"],
 
-        elemento["lat_carretera"] = (
-            punto.get("lat")
-        )
+            "tipo":
+            datos["tipo"],
 
-        elemento["lng_carretera"] = (
-            punto.get("lng")
-        )
+            "lat":
+            datos["lat"],
 
-        elemento["distancia_carretera_m"] = (
-            punto.get("distancia_m")
-        )
+            "lng":
+            datos["lng"],
 
-        elemento["carretera"] = (
-            punto.get(
-                "nombre_carretera",
-                ""
+            "lat_original":
+            datos.get(
+                "lat_original",
+                datos["lat"]
+            ),
+
+            "lng_original":
+            datos.get(
+                "lng_original",
+                datos["lng"]
             )
-        )
+        }
 
-        elemento["advertencia"] = (
-            punto.get(
-                "advertencia"
-            )
-        )
-
-        resultado.append(elemento)
-
-    return jsonify({
-        "exito": True,
-        "atractivos": resultado
-    })
+    return jsonify(resultado)
 
 
 # ============================================================
-# API PARA MOSTRAR EL GRAFO
+# API DEL GRAFO
 # ============================================================
 
 @app.route(
-    "/api/grafo",
-    methods=["GET"]
+    "/api/grafo"
 )
 def api_grafo():
 
-    if not preparar_grafo():
+    if not GRAFO:
 
-        return jsonify({
-            "exito": False,
-            "error": "No se pudo construir el grafo."
-        }), 500
+        preparar_grafo()
 
-    nodos = []
-
-    for id_nodo, lugar in ATRACTIVOS.items():
-
-        nodos.append({
-            "id": id_nodo,
-            "nombre": lugar["nombre"],
-            "codigo": lugar["cod"],
-            "lat": lugar["lat"],
-            "lng": lugar["lng"]
-        })
-
-    aristas = []
-
-    for origen, vecinos in GRAFO.items():
-
-        for destino, datos in vecinos.items():
-
-            aristas.append({
-
-                "origen": origen,
-
-                "destino": destino,
-
-                "distancia_km": round(
-                    datos["distancia_km"],
-                    3
-                ),
-
-                "tiempo_min": round(
-                    datos["tiempo_min"],
-                    2
-                ),
-
-                "costo": round(
-                    datos["costo"],
-                    2
-                )
-            })
-
-    return jsonify({
-
-        "exito": True,
-
-        "nodos": nodos,
-
-        "aristas": aristas,
-
-        "total_nodos": len(nodos),
-
-        "total_aristas": len(aristas)
-    })
+    return jsonify(GRAFO)
 
 
 # ============================================================
@@ -1414,8 +1183,7 @@ def api_grafo():
 # ============================================================
 
 @app.route(
-    "/api/dias",
-    methods=["GET"]
+    "/api/dias"
 )
 def api_dias():
 
@@ -1426,7 +1194,8 @@ def api_dias():
             "destinos": [
                 1, 2, 4, 5, 17
             ],
-            "zona": "🌊 Playas de Antón"
+            "zona":
+            "🌊 Playas de Antón"
         },
 
         {
@@ -1434,15 +1203,18 @@ def api_dias():
             "destinos": [
                 8, 22, 12, 14, 15
             ],
-            "zona": "🏛️ Penonomé Histórico"
+            "zona":
+            "🏛️ Penonomé Histórico"
         },
 
         {
             "dia": 3,
             "destinos": [
-                18, 20, 23, 24, 13, 9
+                18, 20, 23,
+                24, 13, 9
             ],
-            "zona": "⛰️ La Pintada - Montaña"
+            "zona":
+            "⛰️ La Pintada - Montaña"
         },
 
         {
@@ -1450,15 +1222,18 @@ def api_dias():
             "destinos": [
                 10, 25, 26, 19
             ],
-            "zona": "🏺 Ruta Arqueológica de Natá"
+            "zona":
+            "🏺 Ruta Arqueológica de Natá"
         },
 
         {
             "dia": 5,
             "destinos": [
-                6, 7, 28, 21, 29
+                6, 7, 28,
+                21, 29
             ],
-            "zona": "🌿 Naturaleza de Antón"
+            "zona":
+            "🌿 Naturaleza de Antón"
         },
 
         {
@@ -1466,36 +1241,63 @@ def api_dias():
             "destinos": [
                 16, 3, 27, 11
             ],
-            "zona": "🌅 Tesoros de Aguadulce"
+            "zona":
+            "🌅 Tesoros de Aguadulce"
         },
 
         {
             "dia": 7,
             "destinos": [
-                15, 18, 20, 23, 24
+                15, 18, 20,
+                23, 24
             ],
-            "zona": "🎯 Circuito Integrador"
+            "zona":
+            "🎯 Circuito Integrador"
         }
+
     ]
 
     return jsonify(dias)
 
 
 # ============================================================
-# INICIAR SERVIDOR
+# INICIO DE LA APLICACIÓN
 # ============================================================
 
 if __name__ == "__main__":
 
-    print("")
-    print("==============================================")
-    print(" PLATAFORMA DE RUTAS TURÍSTICAS DE COCLÉ")
-    print(" Algoritmo de Dijkstra")
-    print("==============================================")
-    print("")
+    print(
+        "=========================================="
+    )
+
+    print(
+        " RUTAS TURÍSTICAS DE COCLÉ"
+    )
+
+    print(
+        " Optimización mediante Dijkstra"
+    )
+
+    print(
+        "=========================================="
+    )
+
+    print(
+        f"Atractivos registrados: "
+        f"{len(ATRACTIVOS)}"
+    )
+
+    # --------------------------------------------------------
+    # No construimos el grafo inmediatamente.
+    #
+    # Esto evita que Flask tarde demasiado al arrancar,
+    # ya que OSRM debe consultar las carreteras.
+    # --------------------------------------------------------
+
+    print(
+        "Servidor iniciado."
+    )
 
     app.run(
-        debug=True,
-        host="127.0.0.1",
-        port=5000
+        debug=True
     )
