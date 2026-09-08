@@ -1532,10 +1532,9 @@ async function calcularRuta() {
 
 
         rutaActual =
-            [
-                origen,
-                destino
-            ];
+            Array.isArray(data.camino)
+                ? data.camino
+                : [origen, destino];
 
 
         dibujarRuta(
@@ -1590,6 +1589,10 @@ function dibujarRuta(
     data
 ) {
 
+    if (!data || !Array.isArray(data.nodos_ruta)) {
+        console.error('Respuesta de ruta inválida:', data);
+        throw new Error('La respuesta del servidor no contiene nodos_ruta.');
+    }
 
     if (rutaLayer) {
 
@@ -1826,7 +1829,7 @@ function actualizarEstadisticas(
             'totalCosto'
         )
         .textContent =
-        `$${data.costo.toFixed(2)}`;
+        `$${Number(data.costo).toFixed(2)}`;
 
 
     document
@@ -1843,351 +1846,145 @@ function actualizarEstadisticas(
 // PANEL
 // ============================================================
 
-function actualizarPanel(
-    data
-) {
+function actualizarPanel(data) {
 
+    const panel = document.getElementById('panelRuta');
 
-    const panel =
-        document.getElementById(
-            'panelRuta'
-        );
-
+    const nombresCriterio = {
+        distancia: 'Distancia mínima',
+        tiempo: 'Tiempo mínimo',
+        costo: 'Costo mínimo'
+    };
 
     const nombreCriterio =
-        data.criterio_nombre;
-
+        nombresCriterio[data.criterio] ||
+        data.criterio ||
+        'Criterio seleccionado';
 
     let html = `
-
-        <h6
-            class="fw-bold text-success mb-3">
-
-            <i
-                class="fas fa-route me-2">
-            </i>
-
+        <h6 class="fw-bold text-success mb-3">
+            <i class="fas fa-route me-2"></i>
             Ruta óptima
-
-            <span
-                class="badge bg-success ms-2">
-
-                Dijkstra
-
-            </span>
-
+            <span class="badge bg-success ms-2">Dijkstra</span>
         </h6>
 
-
-        <div
-            class="alert alert-light border">
-
-            <strong>
-                Criterio:
-            </strong>
-
+        <div class="alert alert-light border">
+            <strong>Criterio:</strong>
             ${nombreCriterio}
-
         </div>
-
 
         <div class="mb-3">
-
-            <div
-                class="d-flex justify-content-between">
-
+            <div class="d-flex justify-content-between">
                 <span>
-
-                    <i
-                        class="fas fa-road text-success">
-                    </i>
-
-                    ${data.distancia_km} km
-
+                    <i class="fas fa-road text-success"></i>
+                    ${Number(data.distancia_km).toFixed(2)} km
                 </span>
 
-
                 <span>
-
-                    <i
-                        class="fas fa-clock text-primary">
-                    </i>
-
-                    ${data.tiempo_min} min
-
+                    <i class="fas fa-clock text-primary"></i>
+                    ${Number(data.tiempo_min).toFixed(0)} min
                 </span>
 
-
                 <span>
-
-                    <i
-                        class="fas fa-dollar-sign text-warning">
-                    </i>
-
-                    $${data.costo.toFixed(2)}
-
+                    <i class="fas fa-dollar-sign text-warning"></i>
+                    $${Number(data.costo).toFixed(2)}
                 </span>
-
             </div>
-
         </div>
 
-
-        <div
-            class="border-top pt-3">
-
+        <div class="border-top pt-3">
             <p class="mb-1">
-
-                <strong>
-                    Origen:
-                </strong>
-
-                ${data.nodo_origen.nombre}
-
+                <strong>Origen:</strong>
+                ${data.nodos_ruta?.[0]?.nombre || 'No disponible'}
             </p>
 
-
             <p class="mb-1">
-
-                <strong>
-                    Destino:
-                </strong>
-
-                ${data.nodo_destino.nombre}
-
+                <strong>Destino:</strong>
+                ${data.nodos_ruta?.[data.nodos_ruta.length - 1]?.nombre || 'No disponible'}
             </p>
-
         </div>
-
 
         <hr>
 
-
         <h6 class="fw-bold">
-
             Camino encontrado por Dijkstra
-
         </h6>
-
     `;
 
-
-    // --------------------------------------------------------
-    // NODOS
-    // --------------------------------------------------------
-
-    data.nodos_ruta.forEach(
-        (nodo, indice) => {
-
+    // Nodos de la ruta
+    if (Array.isArray(data.nodos_ruta)) {
+        data.nodos_ruta.forEach((nodo, indice) => {
 
             html += `
+                <div class="paso"
+                     style="background:#f8f9fa; margin-top:5px;">
 
-                <div
-                    class="paso"
-                    style="
-                        background:#f8f9fa;
-                        margin-top:5px;
-                    ">
-
-                    <span
-                        class="indice">
-
+                    <span class="indice">
                         ${indice + 1}
-
                     </span>
 
                     <div>
-
-                        <strong>
-
-                            ${nodo.nombre}
-
-                        </strong>
-
+                        <strong>${nodo.nombre}</strong>
                         <br>
-
-                        <small
-                            class="text-muted">
-
-                            Nodo:
-                            ${nodo.cod}
-
+                        <small class="text-muted">
+                            Nodo: ${nodo.cod}
                         </small>
-
                     </div>
-
                 </div>
-
             `;
+        });
+    }
 
-        }
-    );
-
-
-    // --------------------------------------------------------
-    // TRAMOS
-    // --------------------------------------------------------
-
-    if (
-        data.tramos
-        &&
-        data.tramos.length > 0
-    ) {
-
+    // Segmentos de la ruta
+    if (Array.isArray(data.segmentos) && data.segmentos.length > 0) {
 
         html += `
-
             <hr>
-
             <h6 class="fw-bold">
-
                 Detalle de los tramos
-
             </h6>
-
         `;
 
+        data.segmentos.forEach((tramo, indice) => {
 
-        data.tramos.forEach(
-            (tramo, indice) => {
+            const origen =
+                data.nodos_ruta.find(
+                    n => Number(n.id) === Number(tramo.origen)
+                );
 
+            const destino =
+                data.nodos_ruta.find(
+                    n => Number(n.id) === Number(tramo.destino)
+                );
 
-                const origen =
-                    ATRACTIVOS[
-                        tramo.origen
-                    ];
-
-
-                const destino =
-                    ATRACTIVOS[
-                        tramo.destino
-                    ];
-
-
-                html += `
-
-                    <div
-                        class="border rounded p-2 mb-2">
-
-                        <small>
-
-                            <strong>
-                                ${indice + 1}.
-                            </strong>
-
-                            ${origen.nombre}
-
-                            →
-
-                            ${destino.nombre}
-
-                        </small>
-
-                        <br>
-
-                        <small
-                            class="text-muted">
-
-                            ${tramo.distancia_km.toFixed(2)}
-                            km
-
-                            ·
-
-                            ${tramo.tiempo_min.toFixed(1)}
-                            min
-
-                            ·
-
-                            $${tramo.costo.toFixed(2)}
-
-                        </small>
-
-                    </div>
-
-                `;
-
-            }
-        );
-
+            html += `
+                <div class="border rounded p-2 mb-2">
+                    <small>
+                        <strong>${indice + 1}.</strong>
+                        ${origen?.nombre || 'Origen'}
+                        →
+                        ${destino?.nombre || 'Destino'}
+                    </small>
+                    <br>
+                    <small class="text-muted">
+                        ${Number(tramo.distancia_km).toFixed(2)} km
+                        ·
+                        ${Number(tramo.tiempo_min).toFixed(1)} min
+                        ·
+                        $${Number(tramo.costo).toFixed(2)}
+                    </small>
+                </div>
+            `;
+        });
     }
 
-
-    // --------------------------------------------------------
-    // INSTRUCCIONES
-    // --------------------------------------------------------
-
-    if (
-        data.instrucciones
-        &&
-        data.instrucciones.length > 0
-    ) {
-
-
-        html += `
-
-            <hr>
-
-            <h6 class="fw-bold">
-
-                Instrucciones de recorrido
-
-            </h6>
-
-        `;
-
-
-        data.instrucciones
-            .slice(0, 8)
-            .forEach(
-                (inst, indice) => {
-
-
-                    html += `
-
-                        <div
-                            class="paso"
-                            style="
-                                background:#f8f9fa;
-                                margin-top:4px;
-                            ">
-
-                            <span
-                                class="indice"
-                                style="
-                                    background:#6c757d;
-                                ">
-
-                                ${indice + 1}
-
-                            </span>
-
-                            <span
-                                style="
-                                    font-size:12px;
-                                ">
-
-                                ${inst}
-
-                            </span>
-
-                        </div>
-
-                    `;
-
-                }
-            );
-
-    }
-
-
-    panel.innerHTML =
-        html;
-
+    panel.innerHTML = html;
 }
 
 
 // ============================================================
 // VOZ
+
 // ============================================================
 
 let vozActiva =
@@ -2247,11 +2044,15 @@ function hablar() {
 
 
     const origen =
-        ultimaRuta.nodo_origen.nombre;
+        ultimaRuta.nodos_ruta?.[0]?.nombre
+        || 'el punto de origen';
 
 
     const destino =
-        ultimaRuta.nodo_destino.nombre;
+        ultimaRuta.nodos_ruta?.[
+            ultimaRuta.nodos_ruta.length - 1
+        ]?.nombre
+        || 'el punto de destino';
 
 
     const distancia =
@@ -2262,8 +2063,16 @@ function hablar() {
         ultimaRuta.tiempo_min;
 
 
+    const nombresCriterio = {
+        distancia: 'distancia mínima',
+        tiempo: 'tiempo mínimo',
+        costo: 'costo mínimo'
+    };
+
     const criterio =
-        ultimaRuta.criterio_nombre;
+        nombresCriterio[ultimaRuta.criterio]
+        || ultimaRuta.criterio
+        || 'criterio seleccionado';
 
 
     const mensaje =
