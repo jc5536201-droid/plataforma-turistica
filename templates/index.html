@@ -1625,9 +1625,12 @@ function dibujarRuta(
     // --------------------------------------------------------
 
     rutaLayer =
-        L.polyline(
-            data.puntos_ruta,
-            {
+        L.layerGroup().addTo(mapa);
+
+    // La línea principal sigue únicamente la red vial calculada por OSRM.
+    const lineaVial = L.polyline(
+        data.puntos_ruta,
+        {
 
                 color:
                     '#1D9E75',
@@ -1645,9 +1648,34 @@ function dibujarRuta(
                     1
 
             }
-        )
-        .addTo(mapa);
+        }
+    ).addTo(rutaLayer);
 
+    // Conectores visuales: unen cada atractivo (coordenada real)
+    // con el punto de acceso a carretera usado por OSRM.
+    if (Array.isArray(data.nodos_ruta)) {
+        data.nodos_ruta.forEach((nodo) => {
+            const latReal = Number(nodo.lat);
+            const lngReal = Number(nodo.lng);
+            const latCarretera = Number(nodo.lat_ruta ?? nodo.lat);
+            const lngCarretera = Number(nodo.lng_ruta ?? nodo.lng);
+
+            if (Number.isFinite(latReal) && Number.isFinite(lngReal) &&
+                Number.isFinite(latCarretera) && Number.isFinite(lngCarretera) &&
+                (Math.abs(latReal - latCarretera) > 0.00001 ||
+                 Math.abs(lngReal - lngCarretera) > 0.00001)) {
+                L.polyline(
+                    [[latReal, lngReal], [latCarretera, lngCarretera]],
+                    {
+                        color: '#7F8C8D',
+                        weight: 2,
+                        opacity: 0.8,
+                        dashArray: '5,5'
+                    }
+                ).addTo(rutaLayer);
+            }
+        });
+    }
 
     // --------------------------------------------------------
     // MARCADORES DE LOS NODOS DE DIJKSTRA
@@ -1717,19 +1745,17 @@ function dibujarRuta(
                 });
 
 
-            const lat =
-                nodo.lat_carretera
-                ?? nodo.lat;
-
-
-            const lng =
-                nodo.lng_carretera
-                ?? nodo.lng;
-
+            // IMPORTANTE:
+            // El marcador representa la ubicación real del atractivo,
+            // por lo que debe usar las coordenadas originales de Google Maps.
+            // Las coordenadas "lat_ruta/lng_ruta" solo se usan para
+            // conectar la ruta a la red vial de OSRM.
+            const lat = nodo.lat;
+            const lng = nodo.lng;
 
             const marker =
                 L.marker(
-                    [lat,lng],
+                    [lat, lng],
                     {
                         icon:
                             icono
