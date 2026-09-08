@@ -1,2477 +1,1334 @@
-<!DOCTYPE html>
-<html lang="es">
-
-<head>
-
-    <meta charset="UTF-8">
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
-
-    <title>
-        Rutas Turísticas - Coclé, Panamá
-    </title>
-
-    <!-- Bootstrap -->
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-        rel="stylesheet">
-
-    <!-- Leaflet -->
-    <link
-        rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-
-    <!-- Font Awesome -->
-    <link
-        rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
-
-    <style>
-
-        :root {
-
-            --verde: #1D9E75;
-            --azul: #2E86C1;
-            --oscuro: #1F4E79;
-            --morado: #6C3CE1;
-
-        }
-
-
-        * {
-
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-
-        }
-
-
-        body {
-
-            font-family:
-                'Segoe UI',
-                Tahoma,
-                Geneva,
-                Verdana,
-                sans-serif;
-
-            background: #f0f4f8;
-
-        }
-
-
-        /* HEADER */
-
-        .header {
-
-            background:
-                linear-gradient(
-                    135deg,
-                    var(--oscuro),
-                    var(--verde)
-                );
-
-            padding: 20px 0;
-
-            color: white;
-
-            box-shadow:
-                0 4px 20px rgba(0,0,0,0.3);
-
-        }
-
-
-        .header h1 {
-
-            font-weight: 700;
-
-            font-size: 2rem;
-
-        }
-
-
-        .subtitulo {
-
-            color:
-                rgba(255,255,255,0.85);
-
-        }
-
-
-        /* ESTADÍSTICAS */
-
-        .stat-card {
-
-            background: white;
-
-            border-radius: 15px;
-
-            padding: 15px 20px;
-
-            box-shadow:
-                0 4px 15px rgba(0,0,0,0.08);
-
-            border-left:
-                5px solid var(--verde);
-
-            transition:
-                transform 0.3s,
-                box-shadow 0.3s;
-
-        }
-
-
-        .stat-card:hover {
-
-            transform:
-                translateY(-5px);
-
-            box-shadow:
-                0 8px 25px
-                rgba(0,0,0,0.15);
-
-        }
-
-
-        .stat-card .icono {
-
-            font-size: 2rem;
-
-            margin-right: 15px;
-
-        }
-
-
-        .stat-card .numero {
-
-            font-size: 1.8rem;
-
-            font-weight: 700;
-
-            color: var(--oscuro);
-
-        }
-
-
-        .stat-card .etiqueta {
-
-            font-size: 0.8rem;
-
-            color: #6c757d;
-
-            text-transform:
-                uppercase;
-
-            letter-spacing:
-                0.5px;
-
-        }
-
-
-        /* MAPA */
-
-        #mapa {
-
-            height: 480px;
-
-            border-radius: 15px;
-
-            border: 3px solid white;
-
-            box-shadow:
-                0 4px 20px
-                rgba(0,0,0,0.1);
-
-            z-index: 1;
-
-        }
-
-
-        /* VOZ */
-
-        .btn-voz {
-
-            background:
-                linear-gradient(
-                    135deg,
-                    var(--morado),
-                    #9B59B6
-                );
-
-            color: white;
-
-            border: none;
-
-            padding:
-                12px 25px;
-
-            border-radius:
-                50px;
-
-            font-weight: 600;
-
-            transition:
-                all 0.3s ease;
-
-            box-shadow:
-                0 4px 15px
-                rgba(108,60,225,0.4);
-
-        }
-
-
-        .btn-voz:hover {
-
-            transform:
-                scale(1.05);
-
-            color: white;
-
-        }
-
-
-        .btn-voz.escuchando {
-
-            animation:
-                pulso 1.5s infinite;
-
-            background:
-                linear-gradient(
-                    135deg,
-                    #E74C3C,
-                    #C0392B
-                );
-
-        }
-
-
-        @keyframes pulso {
-
-            0% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.05);
-            }
-
-            100% {
-                transform: scale(1);
-            }
-
-        }
-
-
-        /* CALCULAR */
-
-        .btn-calcular {
-
-            background:
-                linear-gradient(
-                    135deg,
-                    var(--verde),
-                    #157a5a
-                );
-
-            color: white;
-
-            border: none;
-
-            padding:
-                12px 35px;
-
-            border-radius:
-                50px;
-
-            font-weight: 700;
-
-            font-size:
-                1.1rem;
-
-            width: 100%;
-
-            transition:
-                all 0.3s ease;
-
-            box-shadow:
-                0 4px 15px
-                rgba(29,158,117,0.4);
-
-        }
-
-
-        .btn-calcular:hover {
-
-            transform:
-                scale(1.02);
-
-            color: white;
-
-        }
-
-
-        /* CRITERIOS */
-
-        .criterio-badge {
-
-            padding:
-                8px 16px;
-
-            border-radius:
-                20px;
-
-            font-weight:
-                600;
-
-            cursor:
-                pointer;
-
-            border:
-                2px solid transparent;
-
-            transition:
-                all 0.3s ease;
-
-            background:
-                white;
-
-            font-size:
-                0.9rem;
-
-        }
-
-
-        .criterio-badge:hover {
-
-            transform:
-                scale(1.05);
-
-        }
-
-
-        .criterio-badge.active {
-
-            border-color:
-                var(--verde);
-
-            background:
-                rgba(
-                    29,
-                    158,
-                    117,
-                    0.1
-                );
-
-            color:
-                var(--verde);
-
-        }
-
-
-        /* PANEL */
-
-        .ruta-info {
-
-            background:
-                white;
-
-            border-radius:
-                15px;
-
-            padding:
-                20px;
-
-            box-shadow:
-                0 4px 15px
-                rgba(0,0,0,0.08);
-
-            max-height:
-                480px;
-
-            overflow-y:
-                auto;
-
-        }
-
-
-        .ruta-info::-webkit-scrollbar {
-
-            width: 5px;
-
-        }
-
-
-        .ruta-info::-webkit-scrollbar-track {
-
-            background:
-                #f0f4f8;
-
-            border-radius:
-                10px;
-
-        }
-
-
-        .ruta-info::-webkit-scrollbar-thumb {
-
-            background:
-                var(--verde);
-
-            border-radius:
-                10px;
-
-        }
-
-
-        .ruta-info .paso {
-
-            display:
-                flex;
-
-            align-items:
-                center;
-
-            padding:
-                8px 12px;
-
-            border-radius:
-                8px;
-
-        }
-
-
-        .ruta-info .paso .indice {
-
-            width:
-                28px;
-
-            height:
-                28px;
-
-            border-radius:
-                50%;
-
-            background:
-                var(--verde);
-
-            color:
-                white;
-
-            display:
-                flex;
-
-            align-items:
-                center;
-
-            justify-content:
-                center;
-
-            font-weight:
-                700;
-
-            font-size:
-                0.75rem;
-
-            margin-right:
-                12px;
-
-            flex-shrink:
-                0;
-
-        }
-
-
-        /* DÍAS */
-
-        .card-dia {
-
-            border-radius:
-                15px;
-
-            cursor:
-                pointer;
-
-            transition:
-                transform 0.2s,
-                box-shadow 0.2s;
-
-            border:
-                none;
-
-            box-shadow:
-                0 2px 10px
-                rgba(0,0,0,0.06);
-
-        }
-
-
-        .card-dia:hover {
-
-            transform:
-                scale(1.04);
-
-            box-shadow:
-                0 8px 25px
-                rgba(0,0,0,0.12);
-
-        }
-
-
-        /* FOOTER */
-
-        .footer {
-
-            background:
-                var(--oscuro);
-
-            color:
-                rgba(255,255,255,0.7);
-
-            padding:
-                30px 0;
-
-            margin-top:
-                50px;
-
-        }
-
-
-        /* SELECT */
-
-        .form-select-custom {
-
-            border-radius:
-                10px;
-
-            border:
-                2px solid #e0e0e0;
-
-            padding:
-                10px 15px;
-
-            font-weight:
-                500;
-
-        }
-
-
-        .badge-api {
-
-            background:
-                #6C3CE1;
-
-            color:
-                white;
-
-            font-size:
-                0.7rem;
-
-            padding:
-                3px 10px;
-
-            border-radius:
-                12px;
-
-        }
-
-
-        .badge-dijkstra {
-
-            background:
-                #1D9E75;
-
-            color:
-                white;
-
-            font-size:
-                0.7rem;
-
-            padding:
-                3px 10px;
-
-            border-radius:
-                12px;
-
-        }
-
-
-        @media (max-width: 768px) {
-
-            #mapa {
-                height: 320px;
-            }
-
-            .stat-card .numero {
-                font-size: 1.3rem;
-            }
-
-            .header h1 {
-                font-size: 1.5rem;
-            }
-
-        }
-
-    </style>
-
-</head>
-
-
-<body>
-
-
-<!-- ========================================================
-     HEADER
-========================================================= -->
-
-<header class="header">
-
-    <div class="container">
-
-        <div class="row align-items-center">
-
-            <div class="col-md-8">
-
-                <h1>
-
-                    <i class="fas fa-map-marked-alt me-2"></i>
-
-                    Rutas Turísticas de Coclé
-
-                </h1>
-
-
-                <p class="subtitulo mb-0">
-
-                    <i class="fas fa-route me-1"></i>
-
-                    Optimización mediante el algoritmo de Dijkstra
-
-                    ·
-
-                    <span class="badge-dijkstra">
-
-                        Dijkstra
-
-                    </span>
-
-                    <span class="badge-api">
-
-                        OSRM + OpenStreetMap
-
-                    </span>
-
-                </p>
-
-            </div>
-
-
-            <div class="col-md-4 text-md-end mt-3 mt-md-0">
-
-                <button
-                    class="btn-voz"
-                    id="btnVoz"
-                    onclick="hablar()">
-
-                    <i class="fas fa-volume-up me-2"></i>
-
-                    Escuchar ruta
-
-                </button>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</header>
-
-
-<!-- ========================================================
-     CONTENIDO
-========================================================= -->
-
-<main class="container py-4">
-
-
-    <!-- ESTADÍSTICAS -->
-
-    <div class="row g-3 mb-4">
-
-
-        <div class="col-6 col-md-3">
-
-            <div class="stat-card d-flex align-items-center">
-
-                <i class="fas fa-route icono text-success"></i>
-
-                <div>
-
-                    <div
-                        class="numero"
-                        id="totalDistancia">
-
-                        --
-
-                    </div>
-
-                    <div class="etiqueta">
-
-                        Distancia total
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="col-6 col-md-3">
-
-            <div
-                class="stat-card d-flex align-items-center"
-                style="border-left-color:var(--azul);">
-
-                <i
-                    class="fas fa-clock icono"
-                    style="color:var(--azul);">
-                </i>
-
-                <div>
-
-                    <div
-                        class="numero"
-                        id="totalTiempo">
-
-                        --
-
-                    </div>
-
-                    <div class="etiqueta">
-
-                        Tiempo estimado
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="col-6 col-md-3">
-
-            <div
-                class="stat-card d-flex align-items-center"
-                style="border-left-color:#F39C12;">
-
-                <i
-                    class="fas fa-dollar-sign icono"
-                    style="color:#F39C12;">
-                </i>
-
-                <div>
-
-                    <div
-                        class="numero"
-                        id="totalCosto">
-
-                        --
-
-                    </div>
-
-                    <div class="etiqueta">
-
-                        Costo estimado
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="col-6 col-md-3">
-
-            <div
-                class="stat-card d-flex align-items-center"
-                style="border-left-color:var(--morado);">
-
-                <i
-                    class="fas fa-location-dot icono"
-                    style="color:var(--morado);">
-                </i>
-
-                <div>
-
-                    <div
-                        class="numero"
-                        id="totalParadas">
-
-                        --
-
-                    </div>
-
-                    <div class="etiqueta">
-
-                        Atractivos visitados
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- SELECTORES -->
-
-    <div class="row g-3 mb-4">
-
-
-        <div class="col-md-4">
-
-            <label class="fw-bold mb-1">
-
-                <i class="fas fa-play text-success me-1"></i>
-
-                Origen
-
-            </label>
-
-
-            <select
-                class="form-select form-select-custom"
-                id="origenSelect">
-
-            </select>
-
-        </div>
-
-
-        <div class="col-md-4">
-
-            <label class="fw-bold mb-1">
-
-                <i class="fas fa-flag-checkered text-danger me-1"></i>
-
-                Destino
-
-            </label>
-
-
-            <select
-                class="form-select form-select-custom"
-                id="destinoSelect">
-
-            </select>
-
-        </div>
-
-
-        <div class="col-md-4">
-
-            <label class="fw-bold mb-1">
-
-                <i class="fas fa-sliders-h text-primary me-1"></i>
-
-                Criterio de optimización
-
-            </label>
-
-
-            <div class="d-flex gap-2 flex-wrap">
-
-
-                <span
-                    class="criterio-badge active"
-                    data-criterio="distancia"
-                    onclick="seleccionarCriterio('distancia')">
-
-                    <i class="fas fa-ruler"></i>
-
-                    Distancia
-
-                </span>
-
-
-                <span
-                    class="criterio-badge"
-                    data-criterio="tiempo"
-                    onclick="seleccionarCriterio('tiempo')">
-
-                    <i class="fas fa-clock"></i>
-
-                    Tiempo
-
-                </span>
-
-
-                <span
-                    class="criterio-badge"
-                    data-criterio="costo"
-                    onclick="seleccionarCriterio('costo')">
-
-                    <i class="fas fa-dollar-sign"></i>
-
-                    Costo
-
-                </span>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- MAPA -->
-
-    <div class="row g-3">
-
-
-        <div class="col-md-8">
-
-
-            <button
-                class="btn-calcular mb-3"
-                onclick="calcularRuta()">
-
-                <i class="fas fa-route me-2"></i>
-
-                Calcular Ruta Óptima con Dijkstra
-
-            </button>
-
-
-            <div id="mapa"></div>
-
-
-        </div>
-
-
-        <div class="col-md-4">
-
-
-            <div
-                class="ruta-info"
-                id="panelRuta">
-
-                <div
-                    class="text-center text-muted py-5">
-
-                    <i
-                        class="fas fa-road fa-3x mb-3 d-block"
-                        style="color:#dce0e5;">
-                    </i>
-
-                    <p>
-
-                        Selecciona origen y destino
-
-                        <br>
-
-                        para calcular la ruta óptima
-
-                    </p>
-
-                    <small>
-
-                        Algoritmo:
-                        <strong>Dijkstra</strong>
-
-                    </small>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- ====================================================
-         7 DÍAS
-    ===================================================== -->
-
-    <hr class="my-5">
-
-
-    <h3 class="text-center mb-4">
-
-        <i
-            class="fas fa-calendar-alt text-success me-2">
-        </i>
-
-        Itinerario de 7 Días
-
-    </h3>
-
-
-    <div
-        class="row g-3"
-        id="diasContainer">
-    </div>
-
-
-</main>
-
-
-<!-- FOOTER -->
-
-<footer class="footer">
-
-    <div class="container text-center">
-
-        <p class="mb-0">
-
-            <i class="fas fa-university me-2"></i>
-
-            Universidad de Panamá · Facultad de Informática
-
-            <br>
-
-            <small>
-
-                Optimización de rutas turísticas
-
-                ·
-
-                Algoritmo de Dijkstra
-
-                ·
-
-                2026
-
-            </small>
-
-        </p>
-
-    </div>
-
-</footer>
-
-
-<!-- ========================================================
-     SCRIPTS
-========================================================= -->
-
-<script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js">
-</script>
-
-
-<script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-</script>
-
-
-<script>
-
-
-// ============================================================
-// DATOS
-// ============================================================
-
-const ATRACTIVOS =
-    {{ atractivos|tojson }};
-
-
-let criterioActual =
-    'distancia';
-
-
-let mapa = null;
-
-
-let rutaLayer = null;
-
-
-let marcadoresRuta = [];
-
-
-let rutaActual = [];
-
-
-let ultimaRuta = null;
-
-
-// ============================================================
-// INICIALIZAR MAPA
-// ============================================================
-
-function initMapa() {
-
-
-    mapa = L.map('mapa')
-        .setView(
-            [8.45, -80.35],
-            10
-        );
-
-
-    L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-
-            attribution:
-                '© OpenStreetMap contributors',
-
-            maxZoom: 19
-
-        }
-    ).addTo(mapa);
-
-
-    agregarMarcadores();
-
+from flask import Flask, render_template, request, jsonify
+import os
+import requests
+import heapq
+import math
+
+app = Flask(__name__)
+
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
+
+OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
+
+# Modelo de costo utilizado en el proyecto.
+# Representa un costo operacional estimado de 0.15 USD por km.
+COSTO_POR_KM = 0.15
+
+# ============================================================
+# ATRACTIVOS TURÍSTICOS
+# ============================================================
+
+ATRACTIVOS = {
+    1: {
+        "nombre": "Playa Santa Clara",
+        "cod": "PSC",
+        "tipo": "Playa",
+        "lat": 8.37518,
+        "lng": -80.10355
+    },
+
+    2: {
+        "nombre": "Playa Farallón",
+        "cod": "PFA",
+        "tipo": "Playa",
+        "lat": 8.35658264,
+        "lng": -80.13722992
+    },
+
+    3: {
+        "nombre": "Playa El Salado",
+        "cod": "PES",
+        "tipo": "Playa",
+        "lat": 8.20197,
+        "lng": -80.48368
+    },
+
+    4: {
+        "nombre": "Playa Blanca",
+        "cod": "PBL",
+        "tipo": "Playa",
+        "lat": 8.34535,
+        "lng": -80.15234
+    },
+
+    5: {
+        "nombre": "Playa Juan Hombrón",
+        "cod": "PJH",
+        "tipo": "Playa",
+        "lat": 8.31682,
+        "lng": -80.20536
+    },
+
+    6: {
+        "nombre": "Mercado Artesanía Valle Antón",
+        "cod": "MAV",
+        "tipo": "Cultural",
+        "lat": 8.60409,
+        "lng": -80.13119
+    },
+
+    7: {
+        "nombre": "Serpentario Maravillas Tropicales",
+        "cod": "SMT",
+        "tipo": "Naturaleza",
+        "lat": 8.601521,
+        "lng": -80.115128
+    },
+
+    8: {
+        "nombre": "Museo Hermanos Arias Madrid",
+        "cod": "MHA",
+        "tipo": "Cultural/Hist.",
+        "lat": 8.52508,
+        "lng": -80.35666
+    },
+
+    9: {
+        "nombre": "P.N. Omar Torrijos",
+        "cod": "PNT",
+        "tipo": "Parque Nacional",
+        "lat": 8.6505,
+        "lng": -80.7125
+    },
+
+    10: {
+        "nombre": "Sitio Arqueológico El Caño",
+        "cod": "SAC",
+        "tipo": "Arqueológico",
+        "lat": 8.39542,
+        "lng": -80.50132
+    },
+
+    11: {
+        "nombre": "Museo Regional Stella Sierra",
+        "cod": "MSS",
+        "tipo": "Cultural/Hist.",
+        "lat": 8.24126389,
+        "lng": -80.54030556
+    },
+
+    12: {
+        "nombre": "Iglesia San Juan Bautista",
+        "cod": "ISJ",
+        "tipo": "Histórico",
+        "lat": 8.52198,
+        "lng": -80.35941
+    },
+
+    13: {
+        "nombre": "El Chorro Las Yayas",
+        "cod": "CLY",
+        "tipo": "Cascada",
+        "lat": 8.63911,
+        "lng": -80.58982
+    },
+
+    14: {
+        "nombre": "Balneario Las Mendozas",
+        "cod": "BLM",
+        "tipo": "Balneario",
+        "lat": 8.52645,
+        "lng": -80.35547
+    },
+
+    15: {
+        "nombre": "Penonomé",
+        "cod": "PEN",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.5205,
+        "lng": -80.35958
+    },
+
+    16: {
+        "nombre": "Aguadulce",
+        "cod": "AGU",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.2421,
+        "lng": -80.5391
+    },
+
+    17: {
+        "nombre": "Antón",
+        "cod": "ANT",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.39448,
+        "lng": -80.26635
+    },
+
+    18: {
+        "nombre": "La Pintada",
+        "cod": "LAP",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.59597,
+        "lng": -80.44647
+    },
+
+    19: {
+        "nombre": "Natá",
+        "cod": "NAT",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.33695,
+        "lng": -80.51771
+    },
+
+    20: {
+        "nombre": "Parroquia Ntra. Sra. Candelaria",
+        "cod": "PNC",
+        "tipo": "Histórico",
+        "lat": 8.59597,
+        "lng": -80.44647
+    },
+
+    21: {
+        "nombre": "Cerro Gaital",
+        "cod": "CGA",
+        "tipo": "Montaña",
+        "lat": 8.6256,
+        "lng": -80.13198
+    },
+
+    22: {
+        "nombre": "Museo de Penonomé",
+        "cod": "MPE",
+        "tipo": "Cultural",
+        "lat": 8.51956,
+        "lng": -80.36061
+    },
+
+    23: {
+        "nombre": "Mercado Artesanías La Pintada",
+        "cod": "MLA",
+        "tipo": "Cultural",
+        "lat": 8.5875,
+        "lng": -80.4425
+    },
+
+    24: {
+        "nombre": "Balneario Los Algarrobos",
+        "cod": "BAL",
+        "tipo": "Naturaleza",
+        "lat": 8.5925,
+        "lng": -80.445
+    },
+
+    25: {
+        "nombre": "Iglesia Santiago Apóstol",
+        "cod": "ISA",
+        "tipo": "Histórico",
+        "lat": 8.33189,
+        "lng": -80.51548
+    },
+
+    26: {
+        "nombre": "Ecoparque Don Arcelio",
+        "cod": "ECO",
+        "tipo": "Naturaleza",
+        "lat": 8.38339661,
+        "lng": -80.52890658
+    },
+
+    27: {
+        "nombre": "Salinas de Aguadulce",
+        "cod": "SAL",
+        "tipo": "Naturaleza",
+        "lat": 8.25983,
+        "lng": -80.49883
+    },
+
+    28: {
+        "nombre": "Mariposario",
+        "cod": "MAR",
+        "tipo": "Naturaleza",
+        "lat": 8.601134,
+        "lng": -80.129326
+    },
+
+    29: {
+        "nombre": "Canopy Adventure",
+        "cod": "CAN",
+        "tipo": "Aventura",
+        "lat": 8.62598002,
+        "lng": -80.1388213
+    }
 }
 
 
-// ============================================================
-// MARCADORES
-// ============================================================
+# ============================================================
+# DISTANCIA GEOGRÁFICA AUXILIAR
+# ============================================================
 
-function agregarMarcadores() {
+def distancia_haversine(lat1, lon1, lat2, lon2):
+    """
+    Calcula la distancia aproximada entre dos coordenadas
+    utilizando la fórmula de Haversine.
+    """
 
+    radio_tierra = 6371.0
 
-    const colores = {
+    lat1 = math.radians(lat1)
+    lat2 = math.radians(lat2)
 
-        'Playa':
-            '#2E86C1',
+    diferencia_lat = math.radians(lat2 - lat1)
+    diferencia_lon = math.radians(lon2 - lon1)
 
-        'Cultural':
-            '#F39C12',
+    a = (
+        math.sin(diferencia_lat / 2) ** 2
+        +
+        math.cos(lat1)
+        * math.cos(lat2)
+        * math.sin(diferencia_lon / 2) ** 2
+    )
 
-        'Cultural/Hist.':
-            '#F39C12',
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-        'Histórico':
-            '#F39C12',
-
-        'Naturaleza':
-            '#8E44AD',
-
-        'Parque Nacional':
-            '#27AE60',
-
-        'Cascada':
-            '#2980B9',
-
-        'Balneario':
-            '#1ABC9C',
-
-        'Arqueológico':
-            '#C0392B',
-
-        'Montaña':
-            '#27AE60',
-
-        'Aventura':
-            '#E67E22',
-
-        'Hub/Ciudad':
-            '#1D9E75'
-
-    };
+    return radio_tierra * c
 
 
-    for (
-        const [id, data]
-        of Object.entries(ATRACTIVOS)
-    ) {
+# ============================================================
+# OBTENER PUNTO MÁS CERCANO A UNA CARRETERA
+# ============================================================
 
+def obtener_punto_carretera(lat, lng):
 
-        const color =
-            colores[data.tipo]
-            || '#6c757d';
+    url = (
+        f"{OSRM_URL}/nearest/v1/driving/"
+        f"{lng},{lat}"
+    )
 
+    params = {
+        "number": 1
+    }
 
-        const marker =
-            L.marker(
-                [
-                    data.lat,
-                    data.lng
-                ],
-                {
+    try:
 
-                    icon:
-                        L.divIcon({
+        respuesta = requests.get(
+            url,
+            params=params,
+            timeout=30
+        )
 
-                            html: `
+        data = respuesta.json()
 
-                                <div style="
-                                    background:${color};
-                                    width:28px;
-                                    height:28px;
-                                    border-radius:50%;
-                                    border:2px solid white;
-                                    box-shadow:
-                                      0 2px 8px
-                                      rgba(0,0,0,0.3);
-                                    display:flex;
-                                    align-items:center;
-                                    justify-content:center;
-                                    font-size:8px;
-                                    font-weight:bold;
-                                    color:white;
-                                ">
+        if respuesta.status_code == 200 and data.get("code") == "Ok":
 
-                                    ${data.cod}
+            waypoint = data["waypoints"][0]
 
-                                </div>
+            coordenadas = waypoint["location"]
 
-                            `,
+            return {
+                "lng": coordenadas[0],
+                "lat": coordenadas[1],
+                "indice": waypoint.get("waypoint_index"),
+                "exito": True
+            }
 
-                            iconSize:
-                                [28,28],
-
-                            iconAnchor:
-                                [14,14]
-
-                        })
-
-                }
-
+        return {
+            "exito": False,
+            "error": data.get(
+                "message",
+                "No se encontró una carretera cercana."
             )
-            .addTo(mapa);
+        }
+
+    except Exception as e:
+
+        return {
+            "exito": False,
+            "error": str(e)
+        }
 
 
-        marker.bindPopup(`
+# ============================================================
+# AJUSTAR TODOS LOS NODOS A LA RED VIAL
+# ============================================================
 
-            <strong>
-                ${data.nombre}
-            </strong>
+def ajustar_puntos_a_carreteras():
 
-            <br>
+    puntos_ajustados = {}
 
-            <span class="badge bg-secondary">
+    for nodo_id, atractivo in ATRACTIVOS.items():
 
-                ${data.tipo}
+        resultado = obtener_punto_carretera(
+            atractivo["lat"],
+            atractivo["lng"]
+        )
 
-            </span>
+        if resultado["exito"]:
 
-            <br>
+            puntos_ajustados[nodo_id] = {
+                **atractivo,
+                "lat_original": atractivo["lat"],
+                "lng_original": atractivo["lng"],
+                "lat": resultado["lat"],
+                "lng": resultado["lng"]
+            }
 
-            <small>
+        else:
 
-                Código:
-                ${data.cod}
+            puntos_ajustados[nodo_id] = {
+                **atractivo,
+                "lat_original": atractivo["lat"],
+                "lng_original": atractivo["lng"]
+            }
 
-            </small>
-
-        `);
+    return puntos_ajustados
 
 
-        marker.on(
-            'click',
-            function() {
+# ============================================================
+# OBTENER RUTA ENTRE DOS PUNTOS
+# ============================================================
 
-                document
-                    .getElementById(
-                        'destinoSelect'
+def obtener_ruta_osrm(
+    origen_lat,
+    origen_lng,
+    destino_lat,
+    destino_lng
+):
+
+    url = (
+        f"{OSRM_URL}/route/v1/driving/"
+        f"{origen_lng},{origen_lat};"
+        f"{destino_lng},{destino_lat}"
+    )
+
+    params = {
+        "overview": "full",
+        "geometries": "geojson",
+        "steps": "true"
+    }
+
+    try:
+
+        respuesta = requests.get(
+            url,
+            params=params,
+            timeout=30
+        )
+
+        data = respuesta.json()
+
+        if respuesta.status_code != 200:
+            return {
+                "exito": False,
+                "error": data.get(
+                    "message",
+                    "Error en OSRM."
+                )
+            }
+
+        if data.get("code") != "Ok":
+            return {
+                "exito": False,
+                "error": data.get(
+                    "message",
+                    "No se pudo calcular la ruta."
+                )
+            }
+
+        ruta = data["routes"][0]
+
+        distancia_km = ruta["distance"] / 1000
+        tiempo_min = ruta["duration"] / 60
+
+        # ====================================================
+        # COSTO
+        # ====================================================
+        # Costo estimado de operación:
+        # $0.15 por kilómetro.
+        # ====================================================
+
+        costo = distancia_km * COSTO_POR_KM
+
+        geometria = ruta["geometry"]["coordinates"]
+
+        puntos_ruta = [
+            [coordenada[1], coordenada[0]]
+            for coordenada in geometria
+        ]
+
+        instrucciones = []
+
+        for tramo in ruta.get("legs", []):
+
+            for paso in tramo.get("steps", []):
+
+                maneuver = paso.get("maneuver", {})
+
+                instruction = maneuver.get("instruction")
+
+                if instruction:
+                    instrucciones.append(instruction)
+
+        return {
+
+            "distancia_km": round(distancia_km, 2),
+            "tiempo_min": round(tiempo_min),
+            "costo": round(costo, 2),
+            "puntos_ruta": puntos_ruta,
+            "instrucciones": instrucciones,
+            "exito": True
+        }
+
+    except Exception as e:
+
+        return {
+            "exito": False,
+            "error": str(e)
+        }
+
+
+# ============================================================
+# CONSTRUIR MATRIZ DE DISTANCIAS Y TIEMPOS
+# ============================================================
+
+def construir_matriz_osrm(puntos):
+
+    ids = list(puntos.keys())
+
+    coordenadas = ";".join(
+        f"{puntos[nodo]['lng']},{puntos[nodo]['lat']}"
+        for nodo in ids
+    )
+
+    url = (
+        f"{OSRM_URL}/table/v1/driving/"
+        f"{coordenadas}"
+    )
+
+    params = {
+        "annotations": "duration,distance"
+    }
+
+    try:
+
+        respuesta = requests.get(
+            url,
+            params=params,
+            timeout=60
+        )
+
+        data = respuesta.json()
+
+        if respuesta.status_code != 200:
+            raise Exception(
+                data.get(
+                    "message",
+                    "Error al construir matriz OSRM."
+                )
+            )
+
+        if data.get("code") != "Ok":
+            raise Exception(
+                data.get(
+                    "message",
+                    "OSRM no pudo construir la matriz."
+                )
+            )
+
+        matriz_distancia = data["distances"]
+        matriz_tiempo = data["durations"]
+
+        return ids, matriz_distancia, matriz_tiempo
+
+    except Exception as e:
+
+        print("Error construyendo matriz:", e)
+
+        return None, None, None
+
+
+# ============================================================
+# CONSTRUIR GRAFO
+# ============================================================
+
+def construir_grafo(puntos):
+
+    ids, matriz_distancia, matriz_tiempo = construir_matriz_osrm(
+        puntos
+    )
+
+    if ids is None:
+        return {}
+
+    grafo = {}
+
+    for i, nodo_origen in enumerate(ids):
+
+        grafo[nodo_origen] = {}
+
+        for j, nodo_destino in enumerate(ids):
+
+            if i == j:
+                continue
+
+            distancia_metros = matriz_distancia[i][j]
+            tiempo_segundos = matriz_tiempo[i][j]
+
+            if distancia_metros is None or tiempo_segundos is None:
+                continue
+
+            distancia_km = distancia_metros / 1000
+
+            tiempo_min = tiempo_segundos / 60
+
+            costo = distancia_km * COSTO_POR_KM
+
+            grafo[nodo_origen][nodo_destino] = {
+
+                "distancia_km": round(
+                    distancia_km,
+                    2
+                ),
+
+                "tiempo_min": round(
+                    tiempo_min,
+                    2
+                ),
+
+                "costo": round(
+                    costo,
+                    2
+                )
+            }
+
+    return grafo
+
+
+# ============================================================
+# PREPARAR GRAFO
+# ============================================================
+
+GRAFO = {}
+PUNTOS_AJUSTADOS = {}
+
+def preparar_grafo():
+
+    global GRAFO
+    global PUNTOS_AJUSTADOS
+
+    print("Preparando red vial...")
+
+    PUNTOS_AJUSTADOS = ajustar_puntos_a_carreteras()
+
+    print("Construyendo matriz de rutas...")
+
+    GRAFO = construir_grafo(
+        PUNTOS_AJUSTADOS
+    )
+
+    print(
+        f"Grafo construido con {len(GRAFO)} nodos."
+    )
+
+
+# ============================================================
+# DIJKSTRA
+# ============================================================
+
+def dijkstra(grafo, origen, destino, criterio):
+
+    # ========================================================
+    # CORRECCIÓN PRINCIPAL
+    # ========================================================
+    #
+    # El frontend envía:
+    #
+    # distancia
+    # tiempo
+    # costo
+    #
+    # Pero las aristas contienen:
+    #
+    # distancia_km
+    # tiempo_min
+    # costo
+    #
+    # Por eso hacemos esta correspondencia.
+    # ========================================================
+
+    pesos = {
+
+        "distancia": "distancia_km",
+
+        "tiempo": "tiempo_min",
+
+        "costo": "costo"
+    }
+
+    if criterio not in pesos:
+
+        criterio = "tiempo"
+
+    campo_peso = pesos[criterio]
+
+    # ========================================================
+    # Inicialización
+    # ========================================================
+
+    distancias = {
+        nodo: float("inf")
+        for nodo in grafo
+    }
+
+    anteriores = {
+        nodo: None
+        for nodo in grafo
+    }
+
+    distancias[origen] = 0
+
+    cola_prioridad = [
+        (0, origen)
+    ]
+
+    # ========================================================
+    # ALGORITMO DE DIJKSTRA
+    # ========================================================
+
+    while cola_prioridad:
+
+        distancia_actual, nodo_actual = heapq.heappop(
+            cola_prioridad
+        )
+
+        if distancia_actual > distancias[nodo_actual]:
+            continue
+
+        if nodo_actual == destino:
+            break
+
+        vecinos = grafo.get(
+            nodo_actual,
+            {}
+        )
+
+        for vecino, datos in vecinos.items():
+
+            # ================================================
+            # CORRECCIÓN:
+            # antes estaba:
+            #
+            # peso = datos[criterio]
+            #
+            # ahora usamos:
+            #
+            # peso = datos[campo_peso]
+            # ================================================
+
+            peso = datos[campo_peso]
+
+            nueva_distancia = (
+                distancia_actual + peso
+            )
+
+            if nueva_distancia < distancias[vecino]:
+
+                distancias[vecino] = nueva_distancia
+
+                anteriores[vecino] = nodo_actual
+
+                heapq.heappush(
+                    cola_prioridad,
+                    (
+                        nueva_distancia,
+                        vecino
                     )
-                    .value = id;
-
-                calcularRuta();
-
-            }
-        );
-
-    }
-
-}
-
-
-// ============================================================
-// SELECTORES
-// ============================================================
-
-function llenarSelectores() {
-
-
-    const origen =
-        document.getElementById(
-            'origenSelect'
-        );
-
-
-    const destino =
-        document.getElementById(
-            'destinoSelect'
-        );
-
-
-    for (
-        const [id, data]
-        of Object.entries(ATRACTIVOS)
-    ) {
-
-
-        const optOrigen =
-            document.createElement(
-                'option'
-            );
-
-
-        optOrigen.value =
-            id;
-
-
-        optOrigen.textContent =
-            `${data.cod} - ${data.nombre}`;
-
-
-        origen.appendChild(
-            optOrigen
-        );
-
-
-        const optDestino =
-            document.createElement(
-                'option'
-            );
-
-
-        optDestino.value =
-            id;
-
-
-        optDestino.textContent =
-            `${data.cod} - ${data.nombre}`;
-
-
-        destino.appendChild(
-            optDestino
-        );
-
-    }
-
-
-    origen.value =
-        "15";
-
-
-    destino.value =
-        "1";
-
-}
-
-
-// ============================================================
-// CRITERIO
-// ============================================================
-
-function seleccionarCriterio(
-    criterio
-) {
-
-
-    criterioActual =
-        criterio;
-
-
-    document
-        .querySelectorAll(
-            '.criterio-badge'
-        )
-        .forEach(
-            el => {
-
-                el.classList.toggle(
-                    'active',
-                    el.dataset.criterio
-                    === criterio
-                );
-
-            }
-        );
-
-}
-
-
-// ============================================================
-// CALCULAR RUTA
-// ============================================================
-
-async function calcularRuta() {
-
-
-    const origen =
-        parseInt(
-            document
-                .getElementById(
-                    'origenSelect'
                 )
-                .value
-        );
 
+    # ========================================================
+    # VERIFICAR SI EXISTE CAMINO
+    # ========================================================
 
-    const destino =
-        parseInt(
-            document
-                .getElementById(
-                    'destinoSelect'
-                )
-                .value
-        );
+    if distancias.get(destino, float("inf")) == float("inf"):
 
+        return None
 
-    if (
-        origen === destino
-    ) {
+    # ========================================================
+    # RECONSTRUIR CAMINO
+    # ========================================================
 
-        alert(
-            '⚠️ El origen y el destino deben ser diferentes.'
-        );
+    camino = []
 
-        return;
+    nodo = destino
 
+    while nodo is not None:
+
+        camino.append(nodo)
+
+        nodo = anteriores[nodo]
+
+    camino.reverse()
+
+    return {
+
+        "camino": camino,
+
+        "peso_total": round(
+            distancias[destino],
+            2
+        ),
+
+        "criterio": criterio
     }
 
 
-    const panel =
-        document.getElementById(
-            'panelRuta'
-        );
+# ============================================================
+# OBTENER GEOMETRÍA COMPLETA DEL CAMINO
+# ============================================================
 
+def obtener_geometria_camino(camino):
 
-    panel.innerHTML = `
+    if not camino or len(camino) < 2:
 
-        <div class="text-center py-4">
+        return []
 
-            <div
-                class="spinner-border text-success"
-                role="status">
-            </div>
+    coordenadas = ";".join(
 
-            <p class="mt-3 mb-1">
+        f"{PUNTOS_AJUSTADOS[nodo]['lng']},"
+        f"{PUNTOS_AJUSTADOS[nodo]['lat']}"
 
-                Ejecutando Dijkstra...
+        for nodo in camino
+    )
 
-            </p>
+    url = (
+        f"{OSRM_URL}/route/v1/driving/"
+        f"{coordenadas}"
+    )
 
-            <small class="text-muted">
+    params = {
 
-                Consultando red vial y calculando
-                el camino mínimo.
+        "overview": "full",
 
-            </small>
+        "geometries": "geojson",
 
-        </div>
-
-    `;
-
-
-    try {
-
-
-        const respuesta =
-            await fetch(
-                '/api/ruta',
-                {
-
-                    method:
-                        'POST',
-
-                    headers:
-                        {
-                            'Content-Type':
-                                'application/json'
-                        },
-
-                    body:
-                        JSON.stringify({
-
-                            origen:
-                                origen,
-
-                            destino:
-                                destino,
-
-                            criterio:
-                                criterioActual
-
-                        })
-
-                }
-            );
-
-
-        const data =
-            await respuesta.json();
-
-
-        if (
-            !respuesta.ok
-            || !data.exito
-        ) {
-
-            throw new Error(
-                data.error
-                || 'No se pudo calcular la ruta.'
-            );
-
-        }
-
-
-        ultimaRuta =
-            data;
-
-
-        rutaActual =
-            Array.isArray(data.camino)
-                ? data.camino
-                : [origen, destino];
-
-
-        dibujarRuta(
-            data
-        );
-
-
-        actualizarEstadisticas(
-            data
-        );
-
-
-        actualizarPanel(
-            data
-        );
-
-
+        "steps": "true"
     }
 
-    catch (error) {
+    try:
 
-
-        console.error(
-            error
-        );
-
-
-        panel.innerHTML = `
-
-            <div class="alert alert-danger">
-
-                <strong>
-                    Error:
-                </strong>
-
-                ${error.message}
-
-            </div>
-
-        `;
-
-    }
-
-}
-
-
-// ============================================================
-// DIBUJAR RUTA
-// ============================================================
-
-function dibujarRuta(
-    data
-) {
-
-    if (!data || !Array.isArray(data.nodos_ruta)) {
-        console.error('Respuesta de ruta inválida:', data);
-        throw new Error('La respuesta del servidor no contiene nodos_ruta.');
-    }
-
-    if (rutaLayer) {
-
-        mapa.removeLayer(
-            rutaLayer
-        );
-
-        rutaLayer = null;
-
-    }
-
-
-    marcadoresRuta.forEach(
-        marker => {
-
-            mapa.removeLayer(
-                marker
-            );
-
-        }
-    );
-
-
-    marcadoresRuta =
-        [];
-
-
-    // --------------------------------------------------------
-    // LÍNEA DE RUTA
-    // --------------------------------------------------------
-
-    rutaLayer =
-        L.polyline(
-            data.puntos_ruta,
-            {
-
-                color:
-                    '#1D9E75',
-
-                weight:
-                    6,
-
-                opacity:
-                    0.9,
-
-                lineJoin:
-                    'round',
-
-                smoothFactor:
-                    1
-
-            }
+        respuesta = requests.get(
+            url,
+            params=params,
+            timeout=60
         )
-        .addTo(mapa);
 
+        data = respuesta.json()
 
-    // --------------------------------------------------------
-    // MARCADORES DE LOS NODOS DE DIJKSTRA
-    // --------------------------------------------------------
+        if respuesta.status_code != 200:
+            return []
 
-    data.nodos_ruta.forEach(
-        (nodo, indice) => {
+        if data.get("code") != "Ok":
+            return []
 
+        ruta = data["routes"][0]
 
-            let color =
-                '#1D9E75';
+        geometria = ruta["geometry"]["coordinates"]
 
+        return [
+            [coord[1], coord[0]]
+            for coord in geometria
+        ]
 
-            if (
-                indice === 0
-            ) {
+    except Exception as e:
 
-                color =
-                    '#2E86C1';
-
-            }
-
-            else if (
-                indice ===
-                data.nodos_ruta.length - 1
-            ) {
-
-                color =
-                    '#E74C3C';
-
-            }
-
-
-            const icono =
-                L.divIcon({
-
-                    html: `
-
-                        <div style="
-                            background:${color};
-                            width:36px;
-                            height:36px;
-                            border-radius:50%;
-                            border:3px solid white;
-                            box-shadow:
-                                0 2px 12px
-                                rgba(0,0,0,0.4);
-                            display:flex;
-                            align-items:center;
-                            justify-content:center;
-                            color:white;
-                            font-weight:bold;
-                        ">
-
-                            ${indice + 1}
-
-                        </div>
-
-                    `,
-
-                    iconSize:
-                        [36,36],
-
-                    iconAnchor:
-                        [18,18]
-
-                });
-
-
-            const lat =
-                nodo.lat_carretera
-                ?? nodo.lat;
-
-
-            const lng =
-                nodo.lng_carretera
-                ?? nodo.lng;
-
-
-            const marker =
-                L.marker(
-                    [lat,lng],
-                    {
-                        icon:
-                            icono
-                    }
-                )
-                .addTo(mapa);
-
-
-            marker.bindPopup(`
-
-                <strong>
-
-                    ${indice + 1}.
-                    ${nodo.nombre}
-
-                </strong>
-
-                <br>
-
-                <span class="badge bg-success">
-
-                    ${nodo.cod}
-
-                </span>
-
-                <br>
-
-                <small>
-
-                    Nodo de Dijkstra
-
-                </small>
-
-            `);
-
-
-            marcadoresRuta.push(
-                marker
-            );
-
-        }
-    );
-
-
-    // --------------------------------------------------------
-    // AJUSTAR MAPA
-    // --------------------------------------------------------
-
-    if (
-        rutaLayer
-        &&
-        rutaLayer
-            .getBounds()
-            .isValid()
-    ) {
-
-        mapa.fitBounds(
-            rutaLayer.getBounds(),
-            {
-                padding:
-                    [60,60]
-            }
-        );
-
-    }
-
-}
-
-
-// ============================================================
-// ESTADÍSTICAS
-// ============================================================
-
-function actualizarEstadisticas(
-    data
-) {
-
-
-    document
-        .getElementById(
-            'totalDistancia'
+        print(
+            "Error obteniendo geometría:",
+            e
         )
-        .textContent =
-        `${data.distancia_km} km`;
+
+        return []
 
 
-    document
-        .getElementById(
-            'totalTiempo'
+# ============================================================
+# RUTA DIRECTA OSRM
+# ============================================================
+
+@app.route("/")
+def index():
+
+    return render_template(
+        "index.html",
+        atractivos=ATRACTIVOS
+    )
+
+
+# ============================================================
+# API PRINCIPAL DE DIJKSTRA
+# ============================================================
+
+@app.route(
+    "/api/ruta",
+    methods=["POST"]
+)
+def api_ruta():
+
+    try:
+
+        data = request.get_json()
+
+        origen = int(
+            data["origen"]
         )
-        .textContent =
-        `${data.tiempo_min} min`;
 
-
-    document
-        .getElementById(
-            'totalCosto'
+        destino = int(
+            data["destino"]
         )
-        .textContent =
-        `$${Number(data.costo).toFixed(2)}`;
 
-
-    document
-        .getElementById(
-            'totalParadas'
+        criterio = data.get(
+            "criterio",
+            "tiempo"
         )
-        .textContent =
-        data.nodos_ruta.length;
-
-}
-
-
-// ============================================================
-// PANEL
-// ============================================================
-
-function actualizarPanel(data) {
-
-    const panel = document.getElementById('panelRuta');
-
-    const nombresCriterio = {
-        distancia: 'Distancia mínima',
-        tiempo: 'Tiempo mínimo',
-        costo: 'Costo mínimo'
-    };
-
-    const nombreCriterio =
-        nombresCriterio[data.criterio] ||
-        data.criterio ||
-        'Criterio seleccionado';
-
-    let html = `
-        <h6 class="fw-bold text-success mb-3">
-            <i class="fas fa-route me-2"></i>
-            Ruta óptima
-            <span class="badge bg-success ms-2">Dijkstra</span>
-        </h6>
-
-        <div class="alert alert-light border">
-            <strong>Criterio:</strong>
-            ${nombreCriterio}
-        </div>
-
-        <div class="mb-3">
-            <div class="d-flex justify-content-between">
-                <span>
-                    <i class="fas fa-road text-success"></i>
-                    ${Number(data.distancia_km).toFixed(2)} km
-                </span>
-
-                <span>
-                    <i class="fas fa-clock text-primary"></i>
-                    ${Number(data.tiempo_min).toFixed(0)} min
-                </span>
-
-                <span>
-                    <i class="fas fa-dollar-sign text-warning"></i>
-                    $${Number(data.costo).toFixed(2)}
-                </span>
-            </div>
-        </div>
-
-        <div class="border-top pt-3">
-            <p class="mb-1">
-                <strong>Origen:</strong>
-                ${data.nodos_ruta?.[0]?.nombre || 'No disponible'}
-            </p>
-
-            <p class="mb-1">
-                <strong>Destino:</strong>
-                ${data.nodos_ruta?.[data.nodos_ruta.length - 1]?.nombre || 'No disponible'}
-            </p>
-        </div>
-
-        <hr>
-
-        <h6 class="fw-bold">
-            Camino encontrado por Dijkstra
-        </h6>
-    `;
-
-    // Nodos de la ruta
-    if (Array.isArray(data.nodos_ruta)) {
-        data.nodos_ruta.forEach((nodo, indice) => {
-
-            html += `
-                <div class="paso"
-                     style="background:#f8f9fa; margin-top:5px;">
-
-                    <span class="indice">
-                        ${indice + 1}
-                    </span>
-
-                    <div>
-                        <strong>${nodo.nombre}</strong>
-                        <br>
-                        <small class="text-muted">
-                            Nodo: ${nodo.cod}
-                        </small>
-                    </div>
-                </div>
-            `;
-        });
-    }
 
-    // Segmentos de la ruta
-    if (Array.isArray(data.segmentos) && data.segmentos.length > 0) {
+        # ====================================================
+        # VALIDAR NODOS
+        # ====================================================
 
-        html += `
-            <hr>
-            <h6 class="fw-bold">
-                Detalle de los tramos
-            </h6>
-        `;
+        if origen not in ATRACTIVOS:
 
-        data.segmentos.forEach((tramo, indice) => {
+            return jsonify({
 
-            const origen =
-                data.nodos_ruta.find(
-                    n => Number(n.id) === Number(tramo.origen)
-                );
+                "exito": False,
 
-            const destino =
-                data.nodos_ruta.find(
-                    n => Number(n.id) === Number(tramo.destino)
-                );
+                "error":
+                "El nodo de origen no existe."
 
-            html += `
-                <div class="border rounded p-2 mb-2">
-                    <small>
-                        <strong>${indice + 1}.</strong>
-                        ${origen?.nombre || 'Origen'}
-                        →
-                        ${destino?.nombre || 'Destino'}
-                    </small>
-                    <br>
-                    <small class="text-muted">
-                        ${Number(tramo.distancia_km).toFixed(2)} km
-                        ·
-                        ${Number(tramo.tiempo_min).toFixed(1)} min
-                        ·
-                        $${Number(tramo.costo).toFixed(2)}
-                    </small>
-                </div>
-            `;
-        });
-    }
+            }), 400
 
-    panel.innerHTML = html;
-}
+        if destino not in ATRACTIVOS:
 
+            return jsonify({
 
-// ============================================================
-// VOZ
+                "exito": False,
 
-// ============================================================
+                "error":
+                "El nodo de destino no existe."
 
-let vozActiva =
-    false;
+            }), 400
 
+        if origen == destino:
 
-function hablar() {
+            return jsonify({
 
+                "exito": False,
 
-    if (
-        !window.speechSynthesis
-    ) {
+                "error":
+                "El origen y destino no pueden ser iguales."
 
-        alert(
-            'Tu navegador no soporta síntesis de voz.'
-        );
+            }), 400
 
-        return;
+        # ====================================================
+        # ASEGURAR QUE EL GRAFO ESTÉ PREPARADO
+        # ====================================================
 
-    }
+        if not GRAFO:
 
+            preparar_grafo()
 
-    const btn =
-        document.getElementById(
-            'btnVoz'
-        );
+        # ====================================================
+        # EJECUTAR DIJKSTRA
+        # ====================================================
 
+        resultado_dijkstra = dijkstra(
 
-    if (vozActiva) {
+            GRAFO,
 
-        window.speechSynthesis.cancel();
+            origen,
 
-        vozActiva =
-            false;
+            destino,
 
-        btn.classList.remove(
-            'escuchando'
-        );
+            criterio
+        )
 
-        btn.innerHTML =
-            '<i class="fas fa-volume-up me-2"></i>Escuchar ruta';
+        if resultado_dijkstra is None:
 
-        return;
+            return jsonify({
 
-    }
+                "exito": False,
 
+                "error":
+                "No se encontró un camino entre los nodos seleccionados."
 
-    if (!ultimaRuta) {
+            }), 404
 
-        alert(
-            'Primero calcula una ruta.'
-        );
+        camino = resultado_dijkstra[
+            "camino"
+        ]
 
-        return;
+        # ====================================================
+        # GEOMETRÍA DE LA RUTA
+        # ====================================================
 
-    }
+        puntos_ruta = obtener_geometria_camino(
+            camino
+        )
 
+        # ====================================================
+        # CALCULAR DATOS TOTALES
+        # ====================================================
 
-    const origen =
-        ultimaRuta.nodos_ruta?.[0]?.nombre
-        || 'el punto de origen';
+        distancia_total = 0
 
+        tiempo_total = 0
 
-    const destino =
-        ultimaRuta.nodos_ruta?.[
-            ultimaRuta.nodos_ruta.length - 1
-        ]?.nombre
-        || 'el punto de destino';
+        costo_total = 0
 
+        segmentos = []
 
-    const distancia =
-        ultimaRuta.distancia_km;
+        for i in range(
+            len(camino) - 1
+        ):
 
-
-    const tiempo =
-        ultimaRuta.tiempo_min;
-
-
-    const nombresCriterio = {
-        distancia: 'distancia mínima',
-        tiempo: 'tiempo mínimo',
-        costo: 'costo mínimo'
-    };
-
-    const criterio =
-        nombresCriterio[ultimaRuta.criterio]
-        || ultimaRuta.criterio
-        || 'criterio seleccionado';
-
-
-    const mensaje =
-
-        `Ruta turística por la provincia de Coclé, Panamá. ` +
-
-        `Utilizando el algoritmo de Dijkstra, ` +
-
-        `se seleccionó la ruta óptima según el criterio de ` +
-
-        `${criterio}. ` +
-
-        `El recorrido inicia en ${origen} ` +
-
-        `y termina en ${destino}. ` +
-
-        `La distancia total es de ${distancia} kilómetros ` +
-
-        `y el tiempo estimado es de ${tiempo} minutos. ` +
-
-        `¡Disfruta tu recorrido!`;
-
-
-    const utterance =
-        new SpeechSynthesisUtterance(
-            mensaje
-        );
-
-
-    utterance.lang =
-        'es-PA';
-
-
-    utterance.rate =
-        0.9;
-
-
-    utterance.pitch =
-        1;
-
-
-    const voces =
-        window.speechSynthesis
-            .getVoices();
-
-
-    const vozEspanol =
-        voces.find(
-            voz =>
-                voz.lang
-                    .toLowerCase()
-                    .startsWith('es')
-        );
-
-
-    if (
-        vozEspanol
-    ) {
-
-        utterance.voice =
-            vozEspanol;
-
-    }
-
-
-    utterance.onstart =
-        () => {
-
-            vozActiva =
-                true;
-
-            btn.classList.add(
-                'escuchando'
-            );
-
-            btn.innerHTML =
-                '<i class="fas fa-stop me-2"></i>Detener';
-
-        };
-
-
-    utterance.onend =
-        () => {
-
-            vozActiva =
-                false;
-
-            btn.classList.remove(
-                'escuchando'
-            );
-
-            btn.innerHTML =
-                '<i class="fas fa-volume-up me-2"></i>Escuchar ruta';
-
-        };
-
-
-    utterance.onerror =
-        () => {
-
-            vozActiva =
-                false;
-
-            btn.classList.remove(
-                'escuchando'
-            );
-
-            btn.innerHTML =
-                '<i class="fas fa-volume-up me-2"></i>Escuchar ruta';
-
-        };
-
-
-    window.speechSynthesis.speak(
-        utterance
-    );
-
-}
-
-
-// ============================================================
-// CARGAR DÍAS
-// ============================================================
-
-async function cargarDias() {
-
-
-    try {
-
-
-        const respuesta =
-            await fetch(
-                '/api/dias'
-            );
-
-
-        const dias =
-            await respuesta.json();
-
-
-        const container =
-            document.getElementById(
-                'diasContainer'
-            );
-
-
-        container.innerHTML =
-            '';
-
-
-        dias.forEach(
-            dia => {
-
-
-                const destinosStr =
-                    dia.destinos
-                        .map(
-                            id =>
-                                ATRACTIVOS[id].cod
-                        )
-                        .join(
-                            ' → '
-                        );
-
-
-                container.innerHTML += `
-
-                    <div
-                        class="col-md-3 col-6">
-
-                        <div
-                            class="card card-dia shadow-sm"
-                            onclick="
-                                cargarDia(
-                                    ${dia.dia}
-                                )
-                            ">
-
-                            <div
-                                class="card-body text-center p-3">
-
-                                <span
-                                    class="
-                                        badge
-                                        bg-success
-                                        rounded-pill
-                                        mb-2
-                                    ">
-
-                                    Día ${dia.dia}
-
-                                </span>
-
-
-                                <h6
-                                    class="card-title mb-1"
-                                    style="
-                                        font-size:0.9rem;
-                                    ">
-
-                                    ${dia.zona}
-
-                                </h6>
-
-
-                                <small
-                                    class="text-muted"
-                                    style="
-                                        font-size:0.7rem;
-                                    ">
-
-                                    ${destinosStr}
-
-                                </small>
-
-
-                                <div
-                                    class="mt-2">
-
-                                    <span
-                                        class="
-                                            badge
-                                            bg-light
-                                            text-dark
-                                        ">
-
-                                        ${dia.destinos.length}
-                                        lugares
-
-                                    </span>
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                `;
-
-            }
-        );
-
-    }
-
-    catch (error) {
-
-        console.error(
-            'Error cargando días:',
-            error
-        );
-
-    }
-
-}
-
-
-// ============================================================
-// CARGAR UN DÍA
-// ============================================================
-
-function cargarDia(
-    dia
-) {
-
-
-    const diasMap = {
-
-        1:
-            [1,2,4,5,17],
-
-        2:
-            [8,22,12,14,15],
-
-        3:
-            [18,20,23,24,13,9],
-
-        4:
-            [10,25,26,19],
-
-        5:
-            [6,7,28,21,29],
-
-        6:
-            [16,3,27,11],
-
-        7:
-            [15,18,20,23,24]
-
-    };
-
-
-    const destinos =
-        diasMap[dia];
-
-
-    if (
-        destinos
-        &&
-        destinos.length >= 2
-    ) {
-
-
-        document
-            .getElementById(
-                'origenSelect'
+            nodo_a = camino[i]
+
+            nodo_b = camino[i + 1]
+
+            datos_segmento = GRAFO[
+                nodo_a
+            ][
+                nodo_b
+            ]
+
+            distancia_total += (
+                datos_segmento[
+                    "distancia_km"
+                ]
             )
-            .value =
-            destinos[0];
 
-
-        document
-            .getElementById(
-                'destinoSelect'
+            tiempo_total += (
+                datos_segmento[
+                    "tiempo_min"
+                ]
             )
-            .value =
-            destinos[
-                destinos.length - 1
-            ];
+
+            costo_total += (
+                datos_segmento[
+                    "costo"
+                ]
+            )
+
+            segmentos.append({
+
+                "origen": nodo_a,
+
+                "destino": nodo_b,
+
+                "distancia_km":
+                datos_segmento[
+                    "distancia_km"
+                ],
+
+                "tiempo_min":
+                datos_segmento[
+                    "tiempo_min"
+                ],
+
+                "costo":
+                datos_segmento[
+                    "costo"
+                ]
+            })
+
+        # ====================================================
+        # NODOS DEL CAMINO
+        # ====================================================
+
+        nodos_ruta = []
+
+        for nodo in camino:
+
+            nodos_ruta.append({
+
+                "id": nodo,
+
+                **ATRACTIVOS[nodo],
+
+                "lat_ruta":
+                PUNTOS_AJUSTADOS[nodo][
+                    "lat"
+                ],
+
+                "lng_ruta":
+                PUNTOS_AJUSTADOS[nodo][
+                    "lng"
+                ]
+            })
+
+        # ====================================================
+        # RESPUESTA
+        # ====================================================
+
+        return jsonify({
+
+            "exito": True,
+
+            "origen": origen,
+
+            "destino": destino,
+
+            "criterio": criterio,
+
+            "camino": camino,
+
+            "nodos_ruta": nodos_ruta,
+
+            "distancia_km":
+            round(
+                distancia_total,
+                2
+            ),
+
+            "tiempo_min":
+            round(
+                tiempo_total
+            ),
+
+            "costo":
+            round(
+                costo_total,
+                2
+            ),
+
+            "puntos_ruta":
+            puntos_ruta,
+
+            "segmentos":
+            segmentos,
+
+            "nodos_visitados":
+            len(camino)
+
+        })
+
+    except Exception as e:
+
+        print(
+            "ERROR API RUTA:",
+            e
+        )
+
+        return jsonify({
+
+            "exito": False,
+
+            "error": str(e)
+
+        }), 500
 
 
-        calcularRuta();
+# ============================================================
+# API PARA COORDENADAS
+# ============================================================
 
-    }
+@app.route(
+    "/api/coordenadas"
+)
+def api_coordenadas():
 
-}
+    if not PUNTOS_AJUSTADOS:
 
+        preparar_grafo()
 
-// ============================================================
-// INICIO
-// ============================================================
+    resultado = {}
 
-document.addEventListener(
-    'DOMContentLoaded',
-    function() {
+    for nodo, datos in PUNTOS_AJUSTADOS.items():
 
+        resultado[nodo] = {
 
-        console.log(
-            '================================'
-        );
+            "nombre":
+            datos["nombre"],
 
+            "cod":
+            datos["cod"],
 
-        console.log(
-            'Plataforma de rutas de Coclé'
-        );
+            "tipo":
+            datos["tipo"],
 
+            # Coordenadas oficiales del atractivo (las tomadas de Google Maps).
+            # Las coordenadas ajustadas a carretera se mantienen separadas para OSRM.
+            "lat":
+            datos.get("lat_original", datos["lat"]),
 
-        console.log(
-            'Algoritmo: Dijkstra'
-        );
+            "lng":
+            datos.get("lng_original", datos["lng"]),
 
+            "lat_original":
+            datos.get("lat_original", datos["lat"]),
 
-        console.log(
-            'Atractivos:',
-            Object.keys(
-                ATRACTIVOS
-            ).length
-        );
+            "lng_original":
+            datos.get("lng_original", datos["lng"]),
 
+            "lat_carretera":
+            datos["lat"],
 
-        console.log(
-            '================================'
-        );
-
-
-        llenarSelectores();
-
-
-        initMapa();
-
-
-        cargarDias();
-
-
-        if (
-            window.speechSynthesis
-        ) {
-
-            window.speechSynthesis
-                .getVoices();
-
-            window.speechSynthesis
-                .onvoiceschanged =
-                () => {
-
-                    window.speechSynthesis
-                        .getVoices();
-
-                };
-
+            "lng_carretera":
+            datos["lng"]
         }
 
-    }
-);
-
-</script>
+    return jsonify(resultado)
 
 
-</body>
+# ============================================================
+# API DEL GRAFO
+# ============================================================
 
-</html>
+@app.route(
+    "/api/grafo"
+)
+def api_grafo():
+
+    if not GRAFO:
+
+        preparar_grafo()
+
+    return jsonify(GRAFO)
+
+
+# ============================================================
+# API DE VERIFICACION DE COORDENADAS
+# ============================================================
+@app.route("/api/verificacion")
+def api_verificacion():
+    """Devuelve coordenadas originales y ajustadas a la red vial."""
+    if not PUNTOS_AJUSTADOS:
+        preparar_grafo()
+
+    resultado = {}
+    for nodo, atractivo in ATRACTIVOS.items():
+        ajustado = PUNTOS_AJUSTADOS.get(nodo, {})
+        resultado[nodo] = {
+            "nombre": atractivo["nombre"],
+            "lat_original": atractivo["lat"],
+            "lng_original": atractivo["lng"],
+            "lat_carretera": ajustado.get("lat", atractivo["lat"]),
+            "lng_carretera": ajustado.get("lng", atractivo["lng"]),
+        }
+    return jsonify(resultado)
+
+
+# ============================================================
+# ITINERARIOS DE 7 DÍAS
+# ============================================================
+
+@app.route(
+    "/api/dias"
+)
+def api_dias():
+
+    dias = [
+
+        {
+            "dia": 1,
+            "destinos": [
+                1, 2, 4, 5, 17
+            ],
+            "zona":
+            "🌊 Playas de Antón"
+        },
+
+        {
+            "dia": 2,
+            "destinos": [
+                8, 22, 12, 14, 15
+            ],
+            "zona":
+            "🏛️ Penonomé Histórico"
+        },
+
+        {
+            "dia": 3,
+            "destinos": [
+                18, 20, 23,
+                24, 13, 9
+            ],
+            "zona":
+            "⛰️ La Pintada - Montaña"
+        },
+
+        {
+            "dia": 4,
+            "destinos": [
+                10, 25, 26, 19
+            ],
+            "zona":
+            "🏺 Ruta Arqueológica de Natá"
+        },
+
+        {
+            "dia": 5,
+            "destinos": [
+                6, 7, 28,
+                21, 29
+            ],
+            "zona":
+            "🌿 Naturaleza de Antón"
+        },
+
+        {
+            "dia": 6,
+            "destinos": [
+                16, 3, 27, 11
+            ],
+            "zona":
+            "🌅 Tesoros de Aguadulce"
+        },
+
+        {
+            "dia": 7,
+            "destinos": [
+                15, 18, 20,
+                23, 24
+            ],
+            "zona":
+            "🎯 Circuito Integrador"
+        }
+
+    ]
+
+    return jsonify(dias)
+
+
+# ============================================================
+# INICIO DE LA APLICACIÓN
+# ============================================================
+
+if __name__ == "__main__":
+
+    print(
+        "=========================================="
+    )
+
+    print(
+        " RUTAS TURÍSTICAS DE COCLÉ"
+    )
+
+    print(
+        " Optimización mediante Dijkstra"
+    )
+
+    print(
+        "=========================================="
+    )
+
+    print(
+        f"Atractivos registrados: "
+        f"{len(ATRACTIVOS)}"
+    )
+
+    # --------------------------------------------------------
+    # No construimos el grafo inmediatamente.
+    #
+    # Esto evita que Flask tarde demasiado al arrancar,
+    # ya que OSRM debe consultar las carreteras.
+    # --------------------------------------------------------
+
+    print(
+        "Servidor iniciado."
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=os.environ.get("FLASK_DEBUG", "0") == "1"
+    )
