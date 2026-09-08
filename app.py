@@ -618,6 +618,122 @@ def preparar_grafo():
     )
 
 
+
+# ============================================================
+# DIAGNÓSTICO Y COMPARACIÓN DE RUTAS
+# ============================================================
+
+def diagnosticar_tramo(origen, destino):
+    """
+    Compara:
+    1) coordenadas originales;
+    2) puntos ajustados a carretera;
+    3) ruta directa OSRM entre ambos puntos ajustados;
+    4) distancia/tiempo de la arista correspondiente del grafo.
+
+    Sirve para identificar diferencias entre la ruta directa y
+    el valor utilizado por Dijkstra.
+    """
+    if origen not in ATRACTIVOS or destino not in ATRACTIVOS:
+        return {
+            "exito": False,
+            "error": "Uno de los nodos no existe."
+        }
+
+    if not PUNTOS_AJUSTADOS:
+        preparar_grafo()
+
+    original_origen = ATRACTIVOS[origen]
+    original_destino = ATRACTIVOS[destino]
+
+    ajustado_origen = PUNTOS_AJUSTADOS[origen]
+    ajustado_destino = PUNTOS_AJUSTADOS[destino]
+
+    ruta_directa = obtener_ruta_osrm(
+        ajustado_origen["lat"],
+        ajustado_origen["lng"],
+        ajustado_destino["lat"],
+        ajustado_destino["lng"]
+    )
+
+    arista_grafo = GRAFO.get(origen, {}).get(destino)
+
+    return {
+        "exito": True,
+        "origen": {
+            "id": origen,
+            "nombre": original_origen["nombre"],
+            "original": {
+                "lat": original_origen["lat"],
+                "lng": original_origen["lng"]
+            },
+            "ajustado": {
+                "lat": ajustado_origen["lat"],
+                "lng": ajustado_origen["lng"]
+            },
+            "desplazamiento_km": round(
+                distancia_haversine(
+                    original_origen["lat"],
+                    original_origen["lng"],
+                    ajustado_origen["lat"],
+                    ajustado_origen["lng"]
+                ),
+                3
+            )
+        },
+        "destino": {
+            "id": destino,
+            "nombre": original_destino["nombre"],
+            "original": {
+                "lat": original_destino["lat"],
+                "lng": original_destino["lng"]
+            },
+            "ajustado": {
+                "lat": ajustado_destino["lat"],
+                "lng": ajustado_destino["lng"]
+            },
+            "desplazamiento_km": round(
+                distancia_haversine(
+                    original_destino["lat"],
+                    original_destino["lng"],
+                    ajustado_destino["lat"],
+                    ajustado_destino["lng"]
+                ),
+                3
+            )
+        },
+        "ruta_directa_osrm": ruta_directa,
+        "arista_grafo": arista_grafo
+    }
+
+
+@app.route("/api/diagnostico", methods=["GET"])
+def api_diagnostico():
+    """
+    Diagnóstico por defecto:
+    Penonomé (15) -> Playa Santa Clara (1)
+
+    También permite:
+    /api/diagnostico?origen=15&destino=1
+    """
+    try:
+        origen = int(request.args.get("origen", 15))
+        destino = int(request.args.get("destino", 1))
+
+        resultado = diagnosticar_tramo(origen, destino)
+
+        if not resultado["exito"]:
+            return jsonify(resultado), 400
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            "exito": False,
+            "error": str(e)
+        }), 500
+
+
 # ============================================================
 # DIJKSTRA
 # ============================================================
@@ -1296,6 +1412,11 @@ if __name__ == "__main__":
 
     print(
         "Servidor iniciado."
+    )
+
+    print(
+        "Diagnóstico disponible en: "
+        "http://127.0.0.1:5000/api/diagnostico?origen=15&destino=1"
     )
 
     app.run(
