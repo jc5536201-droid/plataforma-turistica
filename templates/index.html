@@ -622,6 +622,30 @@
 
         }
 
+
+        /* --------------------------------------------------
+           CORRECCIÓN DE POSICIONAMIENTO DE PINES
+           --------------------------------------------------
+           Leaflet aplica por defecto la clase
+           .leaflet-div-icon con fondo blanco y borde de 1px.
+           Combinado con el reset global "box-sizing:border-box"
+           de esta página, ese fondo/borde desplazaba
+           visualmente el punto donde el icono queda anclado
+           respecto a la coordenada real. Se anula aquí para
+           que el icono personalizado quede exactamente sobre
+           el lat/lng indicado.
+        -------------------------------------------------- */
+
+        .leaflet-div-icon {
+
+            background: transparent !important;
+
+            border: none !important;
+
+            box-shadow: none !important;
+
+        }
+
     </style>
 
 </head>
@@ -1142,7 +1166,7 @@ function initMapa() {
 
 
     L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         {
 
             attribution:
