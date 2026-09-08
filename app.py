@@ -3,6 +3,7 @@ import os
 import requests
 import heapq
 import math
+import threading
 
 app = Flask(__name__)
 
@@ -603,6 +604,13 @@ def construir_grafo(puntos):
 GRAFO = {}
 PUNTOS_AJUSTADOS = {}
 
+# Bloqueo para evitar que dos peticiones concurrentes
+# disparen preparar_grafo() al mismo tiempo (antes esto
+# podía duplicar llamadas a OSRM y dejar el grafo a medio
+# construir si dos usuarios llegaban a la vez).
+_grafo_lock = threading.Lock()
+
+
 def preparar_grafo():
 
     global GRAFO
@@ -621,6 +629,25 @@ def preparar_grafo():
     print(
         f"Grafo construido con {len(GRAFO)} nodos."
     )
+
+
+def asegurar_grafo():
+    """
+    Construye el grafo una sola vez, incluso si llegan
+    varias peticiones concurrentes antes de que exista.
+    """
+
+    global GRAFO
+
+    if GRAFO:
+        return
+
+    with _grafo_lock:
+
+        # Doble verificación: otro hilo pudo haber terminado
+        # de construirlo mientras esperábamos el lock.
+        if not GRAFO:
+            preparar_grafo()
 
 
 # ============================================================
@@ -922,9 +949,7 @@ def api_ruta():
         # ASEGURAR QUE EL GRAFO ESTÉ PREPARADO
         # ====================================================
 
-        if not GRAFO:
-
-            preparar_grafo()
+        asegurar_grafo()
 
         # ====================================================
         # EJECUTAR DIJKSTRA
@@ -1044,6 +1069,9 @@ def api_ruta():
 
                 **ATRACTIVOS[nodo],
 
+                # Coordenadas ajustadas a la red vial (para que
+                # el pin coincida con el punto donde la polilínea
+                # de OSRM realmente toca la carretera).
                 "lat_ruta":
                 PUNTOS_AJUSTADOS[nodo][
                     "lat"
@@ -1126,9 +1154,7 @@ def api_ruta():
 )
 def api_coordenadas():
 
-    if not PUNTOS_AJUSTADOS:
-
-        preparar_grafo()
+    asegurar_grafo()
 
     resultado = {}
 
@@ -1178,9 +1204,7 @@ def api_coordenadas():
 )
 def api_grafo():
 
-    if not GRAFO:
-
-        preparar_grafo()
+    asegurar_grafo()
 
     return jsonify(GRAFO)
 
@@ -1191,8 +1215,7 @@ def api_grafo():
 @app.route("/api/verificacion")
 def api_verificacion():
     """Devuelve coordenadas originales y ajustadas a la red vial."""
-    if not PUNTOS_AJUSTADOS:
-        preparar_grafo()
+    asegurar_grafo()
 
     resultado = {}
     for nodo, atractivo in ATRACTIVOS.items():
