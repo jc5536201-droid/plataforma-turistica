@@ -2,13 +2,17 @@ from flask import Flask, render_template, request, jsonify
 import requests
 import json
 import time
+import urllib3
+
+# Desactivar advertencias de SSL (solo para Render)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 
 # ===== TU API KEY DE OPENROUTESERVICE =====
 ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjgwYWNhZjY3NjIwYjQ2MTRiZjI0Nzg0MDMxOGQ4N2QyIiwiaCI6Im11cm11cjY0In0="
 
-# ===== DATOS DE LOS ATRACTIVOS (29 lugares) =====
+# ===== DATOS DE LOS ATRACTIVOS =====
 ATRACTIVOS = {
     1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa", "lat": 8.42, "lng": -80.12},
     2: {"nombre": "Playa Farallón", "cod": "PFA", "tipo": "Playa", "lat": 8.38, "lng": -80.13},
@@ -55,7 +59,7 @@ def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
     headers = {
         "Authorization": ORS_API_KEY,
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8"
     }
     
     data = {
@@ -63,20 +67,25 @@ def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
         "units": "km",
         "language": "es",
         "geometry": "true",
-        "instructions": "true"
+        "instructions": "true",
+        "elevation": "false"
     }
     
+    print(f"🔍 Calculando ruta ORS...")
+    print(f"📍 Origen: {origen_lat}, {origen_lng}")
+    print(f"📍 Destino: {destino_lat}, {destino_lng}")
+    
     try:
-        print(f"🔍 Calculando ruta: {origen_lat},{origen_lng} → {destino_lat},{destino_lng}")
-        
+        # Aumentar timeout y usar verify=False para evitar problemas SSL
         response = requests.post(
             url, 
             json=data, 
             headers=headers, 
-            timeout=30  # Aumentar timeout para Render
+            timeout=60,
+            verify=True
         )
         
-        print(f"📡 Respuesta código: {response.status_code}")
+        print(f"📡 Código de respuesta: {response.status_code}")
         
         if response.status_code == 200:
             resultado = response.json()
@@ -100,6 +109,8 @@ def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
                 for step in segment['steps']:
                     instrucciones.append(step.get('instruction', ''))
             
+            print(f"✅ Ruta calculada: {distancia_km} km, {tiempo_min} min")
+            
             return {
                 'distancia_km': round(distancia_km, 1),
                 'tiempo_min': round(tiempo_min),
@@ -109,15 +120,47 @@ def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
                 'exito': True
             }
         else:
-            error_msg = f"Error {response.status_code}: {response.text[:200]}"
-            print(f"❌ {error_msg}")
-            return {'exito': False, 'error': error_msg}
+            error_text = response.text[:500] if response.text else "Sin respuesta"
+            print(f"❌ Error {response.status_code}: {error_text}")
+            
+            # Intentar con verify=False si falla SSL
+            if "SSL" in error_text or "certificate" in error_text:
+                print("🔄 Reintentando con verify=False...")
+                response = requests.post(
+                    url, 
+                    json=data, 
+                    headers=headers, 
+                    timeout=60,
+                    verify=False
+                )
+                if response.status_code == 200:
+                    resultado = response.json()
+                    feature = resultado['features'][0]
+                    segment = feature['properties']['segments'][0]
+                    distancia_km = segment['distance'] / 1000
+                    tiempo_min = segment['duration'] / 60
+                    costo = round(distancia_km * 0.15, 2)
+                    geometria = feature['geometry']['coordinates']
+                    puntos_ruta = [[coord[1], coord[0]] for coord in geometria]
+                    return {
+                        'distancia_km': round(distancia_km, 1),
+                        'tiempo_min': round(tiempo_min),
+                        'costo': costo,
+                        'puntos_ruta': puntos_ruta,
+                        'instrucciones': [],
+                        'exito': True
+                    }
+            
+            return {'exito': False, 'error': f"Error {response.status_code}: {response.text[:200]}"}
             
     except requests.exceptions.Timeout:
-        print("❌ Timeout al conectar con ORS")
-        return {'exito': False, 'error': 'Timeout de conexión'}
+        print("❌ Timeout - La API tardó demasiado en responder")
+        return {'exito': False, 'error': 'Timeout - La API tardó demasiado'}
+    except requests.exceptions.ConnectionError as e:
+        print(f"❌ Error de conexión: {str(e)}")
+        return {'exito': False, 'error': f'Error de conexión: {str(e)}'}
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"❌ Error inesperado: {str(e)}")
         return {'exito': False, 'error': str(e)}
 
 # ===== RUTAS DE LA PÁGINA WEB =====
@@ -173,6 +216,13 @@ def api_dias():
     ]
     return jsonify(dias)
 
+@app.route('/api/test')
+def test_api():
+    """Endpoint de prueba para verificar que la API Key funciona"""
+    test_result = calcular_ruta_ors(8.52, -80.35, 8.42, -80.12)
+    return jsonify(test_result)
+
 if __name__ == '__main__':
     print("🚀 Iniciando servidor...")
+    print("📍 API Key configurada")
     app.run(debug=True)
