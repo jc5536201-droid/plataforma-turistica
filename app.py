@@ -105,9 +105,9 @@ ATRACTIVOS = {
         "nombre": "Museo Regional Stella Sierra",
         "cod": "MSS",
         "tipo": "Cultural/Hist.",
-        "lat": 8.24126388888889,
-        "lng": -80.540305555556
-    },
+        "lat": 8.243600477843884,
+        "lng":-80.54045283080579
+    }, 
 
     12: {
         "nombre": "Iglesia San Juan Bautista",
@@ -145,9 +145,9 @@ ATRACTIVOS = {
         "nombre": "Aguadulce",
         "cod": "AGU",
         "tipo": "Hub/Ciudad",
-        "lat": 8.2421,
-        "lng": -80.5391
-    },
+        "lat": 8.230858614451835,
+        "lng": -80.55570602167948
+    }, 
 
     17: {
         "nombre": "Antón",
@@ -249,8 +249,8 @@ ATRACTIVOS = {
         "nombre": "Canopy Adventure",
         "cod": "CAN",
         "tipo": "Aventura",
-        "lat": 8.6078,
-        "lng": -80.1367
+        "lat": 8.638094921683837,
+        "lng": -80.13820276604051
     }
 }
 
