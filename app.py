@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify
+import os
 import requests
 import heapq
 import math
@@ -9,7 +10,11 @@ app = Flask(__name__)
 # CONFIGURACIÓN
 # ============================================================
 
-OSRM_URL = "https://router.project-osrm.org"
+OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
+
+# Modelo de costo utilizado en el proyecto.
+# Representa un costo operacional estimado de 0.15 USD por km.
+COSTO_POR_KM = 0.15
 
 # ============================================================
 # ATRACTIVOS TURÍSTICOS
@@ -28,16 +33,16 @@ ATRACTIVOS = {
         "nombre": "Playa Farallón",
         "cod": "PFA",
         "tipo": "Playa",
-        "lat": 8.3610,
-        "lng": -80.1302
+        "lat": 8.3565826416,
+        "lng": -80.1372299194
     },
 
     3: {
         "nombre": "Playa El Salado",
         "cod": "PES",
         "tipo": "Playa",
-        "lat": 8.1930,
-        "lng": -80.4832
+        "lat": 8.20197,
+        "lng": -80.48368
     },
 
     4: {
@@ -52,24 +57,24 @@ ATRACTIVOS = {
         "nombre": "Playa Juan Hombrón",
         "cod": "PJH",
         "tipo": "Playa",
-        "lat": 8.2983,
-        "lng": -80.2534
+        "lat": 8.31682,
+        "lng": -80.20536
     },
 
     6: {
         "nombre": "Mercado Artesanía Valle Antón",
         "cod": "MAV",
         "tipo": "Cultural",
-        "lat": 8.6008,
-        "lng": -80.1295
+        "lat": 8.60409,
+        "lng": -80.13119
     },
 
     7: {
         "nombre": "Serpentario Maravillas Tropicales",
         "cod": "SMT",
         "tipo": "Naturaleza",
-        "lat": 8.5995,
-        "lng": -80.1275
+        "lat": 8.601521,
+        "lng": -80.115128
     },
 
     8: {
@@ -92,96 +97,96 @@ ATRACTIVOS = {
         "nombre": "Sitio Arqueológico El Caño",
         "cod": "SAC",
         "tipo": "Arqueológico",
-        "lat": 8.3960,
-        "lng": -80.5013
+        "lat": 8.39542,
+        "lng": -80.50132
     },
 
     11: {
         "nombre": "Museo Regional Stella Sierra",
         "cod": "MSS",
         "tipo": "Cultural/Hist.",
-        "lat": 8.2400,
-        "lng": -80.5460
+        "lat": 8.24126388888889,
+        "lng": -80.540305555556
     },
 
     12: {
         "nombre": "Iglesia San Juan Bautista",
         "cod": "ISJ",
         "tipo": "Histórico",
-        "lat": 8.5220,
-        "lng": -80.3594
+        "lat": 8.52198,
+        "lng": -80.35941
     },
 
     13: {
         "nombre": "El Chorro Las Yayas",
         "cod": "CLY",
         "tipo": "Cascada",
-        "lat": 8.6100,
-        "lng": -80.4550
+        "lat": 8.63911,
+        "lng": -80.58982
     },
 
     14: {
         "nombre": "Balneario Las Mendozas",
         "cod": "BLM",
         "tipo": "Balneario",
-        "lat": 8.5450,
-        "lng": -80.3700
+        "lat": 8.52645,
+        "lng": -80.35547
     },
 
     15: {
         "nombre": "Penonomé",
         "cod": "PEN",
         "tipo": "Hub/Ciudad",
-        "lat": 8.51889,
-        "lng": -80.35727
+        "lat": 8.5205,
+        "lng": -80.35958
     },
 
     16: {
         "nombre": "Aguadulce",
         "cod": "AGU",
         "tipo": "Hub/Ciudad",
-        "lat": 8.2400,
-        "lng": -80.5400
+        "lat": 8.2421,
+        "lng": -80.5391
     },
 
     17: {
         "nombre": "Antón",
         "cod": "ANT",
         "tipo": "Hub/Ciudad",
-        "lat": 8.3985,
-        "lng": -80.2609
+        "lat": 8.39448,
+        "lng": -80.26635
     },
 
     18: {
         "nombre": "La Pintada",
         "cod": "LAP",
         "tipo": "Hub/Ciudad",
-        "lat": 8.6012,
-        "lng": -80.4489
+        "lat": 8.59597,
+        "lng": -80.44647
     },
 
     19: {
         "nombre": "Natá",
         "cod": "NAT",
         "tipo": "Hub/Ciudad",
-        "lat": 8.3300,
-        "lng": -80.5200
+        "lat": 8.33695,
+        "lng": -80.51771
     },
 
     20: {
         "nombre": "Parroquia Ntra. Sra. Candelaria",
         "cod": "PNC",
         "tipo": "Histórico",
-        "lat": 8.5600,
-        "lng": -80.4700
+        "lat": 8.59597,
+        "lng": -80.44647
     },
 
     21: {
         "nombre": "Cerro Gaital",
         "cod": "CGA",
         "tipo": "Montaña",
-        "lat": 8.6250,
-        "lng": -80.1280
+        "lat": 8.6256,
+        "lng": -80.13198
     },
 
     22: {
@@ -196,56 +201,56 @@ ATRACTIVOS = {
         "nombre": "Mercado Artesanías La Pintada",
         "cod": "MLA",
         "tipo": "Cultural",
-        "lat": 8.6012,
-        "lng": -80.4489
+        "lat": 8.5875,
+        "lng": -80.4425
     },
 
     24: {
         "nombre": "Balneario Los Algarrobos",
         "cod": "BAL",
         "tipo": "Naturaleza",
-        "lat": 8.6050,
-        "lng": -80.4500
+        "lat": 8.5925,
+        "lng": -80.445
     },
 
     25: {
         "nombre": "Iglesia Santiago Apóstol",
         "cod": "ISA",
         "tipo": "Histórico",
-        "lat": 8.3305,
-        "lng": -80.5195
+        "lat": 8.33189,
+        "lng": -80.51548
     },
 
     26: {
         "nombre": "Ecoparque Don Arcelio",
         "cod": "ECO",
         "tipo": "Naturaleza",
-        "lat": 8.3700,
-        "lng": -80.5200
+        "lat": 8.3833966057575,
+        "lng": -80.52890658192717
     },
 
     27: {
         "nombre": "Salinas de Aguadulce",
         "cod": "SAL",
         "tipo": "Naturaleza",
-        "lat": 8.2000,
-        "lng": -80.5600
+        "lat": 8.25983,
+        "lng": -80.49883
     },
 
     28: {
         "nombre": "Mariposario",
         "cod": "MAR",
         "tipo": "Naturaleza",
-        "lat": 8.4000,
-        "lng": -80.2600
+        "lat": 8.601134,
+        "lng": -80.129326
     },
 
     29: {
         "nombre": "Canopy Adventure",
         "cod": "CAN",
         "tipo": "Aventura",
-        "lat": 8.6000,
-        "lng": -80.1280
+        "lat": 8.6078,
+        "lng": -80.1367
     }
 }
 
@@ -434,7 +439,7 @@ def obtener_ruta_osrm(
         # $0.15 por kilómetro.
         # ====================================================
 
-        costo = distancia_km * 0.15
+        costo = distancia_km * COSTO_POR_KM
 
         geometria = ruta["geometry"]["coordinates"]
 
@@ -568,7 +573,7 @@ def construir_grafo(puntos):
 
             tiempo_min = tiempo_segundos / 60
 
-            costo = distancia_km * 0.15
+            costo = distancia_km * COSTO_POR_KM
 
             grafo[nodo_origen][nodo_destino] = {
 
@@ -616,122 +621,6 @@ def preparar_grafo():
     print(
         f"Grafo construido con {len(GRAFO)} nodos."
     )
-
-
-
-# ============================================================
-# DIAGNÓSTICO Y COMPARACIÓN DE RUTAS
-# ============================================================
-
-def diagnosticar_tramo(origen, destino):
-    """
-    Compara:
-    1) coordenadas originales;
-    2) puntos ajustados a carretera;
-    3) ruta directa OSRM entre ambos puntos ajustados;
-    4) distancia/tiempo de la arista correspondiente del grafo.
-
-    Sirve para identificar diferencias entre la ruta directa y
-    el valor utilizado por Dijkstra.
-    """
-    if origen not in ATRACTIVOS or destino not in ATRACTIVOS:
-        return {
-            "exito": False,
-            "error": "Uno de los nodos no existe."
-        }
-
-    if not PUNTOS_AJUSTADOS:
-        preparar_grafo()
-
-    original_origen = ATRACTIVOS[origen]
-    original_destino = ATRACTIVOS[destino]
-
-    ajustado_origen = PUNTOS_AJUSTADOS[origen]
-    ajustado_destino = PUNTOS_AJUSTADOS[destino]
-
-    ruta_directa = obtener_ruta_osrm(
-        ajustado_origen["lat"],
-        ajustado_origen["lng"],
-        ajustado_destino["lat"],
-        ajustado_destino["lng"]
-    )
-
-    arista_grafo = GRAFO.get(origen, {}).get(destino)
-
-    return {
-        "exito": True,
-        "origen": {
-            "id": origen,
-            "nombre": original_origen["nombre"],
-            "original": {
-                "lat": original_origen["lat"],
-                "lng": original_origen["lng"]
-            },
-            "ajustado": {
-                "lat": ajustado_origen["lat"],
-                "lng": ajustado_origen["lng"]
-            },
-            "desplazamiento_km": round(
-                distancia_haversine(
-                    original_origen["lat"],
-                    original_origen["lng"],
-                    ajustado_origen["lat"],
-                    ajustado_origen["lng"]
-                ),
-                3
-            )
-        },
-        "destino": {
-            "id": destino,
-            "nombre": original_destino["nombre"],
-            "original": {
-                "lat": original_destino["lat"],
-                "lng": original_destino["lng"]
-            },
-            "ajustado": {
-                "lat": ajustado_destino["lat"],
-                "lng": ajustado_destino["lng"]
-            },
-            "desplazamiento_km": round(
-                distancia_haversine(
-                    original_destino["lat"],
-                    original_destino["lng"],
-                    ajustado_destino["lat"],
-                    ajustado_destino["lng"]
-                ),
-                3
-            )
-        },
-        "ruta_directa_osrm": ruta_directa,
-        "arista_grafo": arista_grafo
-    }
-
-
-@app.route("/api/diagnostico", methods=["GET"])
-def api_diagnostico():
-    """
-    Diagnóstico por defecto:
-    Penonomé (15) -> Playa Santa Clara (1)
-
-    También permite:
-    /api/diagnostico?origen=15&destino=1
-    """
-    try:
-        origen = int(request.args.get("origen", 15))
-        destino = int(request.args.get("destino", 1))
-
-        resultado = diagnosticar_tramo(origen, destino)
-
-        if not resultado["exito"]:
-            return jsonify(resultado), 400
-
-        return jsonify(resultado)
-
-    except Exception as e:
-        return jsonify({
-            "exito": False,
-            "error": str(e)
-        }), 500
 
 
 # ============================================================
@@ -1295,6 +1184,28 @@ def api_grafo():
 
 
 # ============================================================
+# API DE VERIFICACION DE COORDENADAS
+# ============================================================
+@app.route("/api/verificacion")
+def api_verificacion():
+    """Devuelve coordenadas originales y ajustadas a la red vial."""
+    if not PUNTOS_AJUSTADOS:
+        preparar_grafo()
+
+    resultado = {}
+    for nodo, atractivo in ATRACTIVOS.items():
+        ajustado = PUNTOS_AJUSTADOS.get(nodo, {})
+        resultado[nodo] = {
+            "nombre": atractivo["nombre"],
+            "lat_original": atractivo["lat"],
+            "lng_original": atractivo["lng"],
+            "lat_carretera": ajustado.get("lat", atractivo["lat"]),
+            "lng_carretera": ajustado.get("lng", atractivo["lng"]),
+        }
+    return jsonify(resultado)
+
+
+# ============================================================
 # ITINERARIOS DE 7 DÍAS
 # ============================================================
 
@@ -1414,11 +1325,8 @@ if __name__ == "__main__":
         "Servidor iniciado."
     )
 
-    print(
-        "Diagnóstico disponible en: "
-        "http://127.0.0.1:5000/api/diagnostico?origen=15&destino=1"
-    )
-
     app.run(
-        debug=True
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=os.environ.get("FLASK_DEBUG", "0") == "1"
     )
