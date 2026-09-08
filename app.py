@@ -1,18 +1,10 @@
 from flask import Flask, render_template, request, jsonify
 import requests
 import json
-import time
-import urllib3
-
-# Desactivar advertencias de SSL (solo para Render)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 
-# ===== TU API KEY DE OPENROUTESERVICE =====
-ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjgwYWNhZjY3NjIwYjQ2MTRiZjI0Nzg0MDMxOGQ4N2QyIiwiaCI6Im11cm11cjY0In0="
-
-# ===== DATOS DE LOS ATRACTIVOS =====
+# ===== DATOS DE LOS ATRACTIVOS (29 lugares) =====
 ATRACTIVOS = {
     1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa", "lat": 8.42, "lng": -80.12},
     2: {"nombre": "Playa Farallón", "cod": "PFA", "tipo": "Playa", "lat": 8.38, "lng": -80.13},
@@ -45,71 +37,59 @@ ATRACTIVOS = {
     29: {"nombre": "Canopy Adventure", "cod": "CAN", "tipo": "Aventura", "lat": 8.40, "lng": -80.26},
 }
 
-# ===== FUNCIÓN PARA CALCULAR RUTA CON OPENROUTESERVICE =====
-def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
+# ===== FUNCIÓN PARA CALCULAR RUTA CON OSRM (GRATIS, SIN API KEY) =====
+def calcular_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
     """
-    Calcula la ruta usando OpenRouteService API
+    Calcula la ruta usando OSRM (Open Source Routing Machine)
+    100% GRATUITO - NO necesita API Key
     """
     
-    url = "https://api.openrouteservice.org/v2/directions/driving-car"
+    # OSRM usa formato: longitud,latitud (¡primero longitud!)
+    url = f"http://router.project-osrm.org/route/v1/driving/{origen_lng},{origen_lat};{destino_lng},{destino_lat}"
     
-    # OpenRouteService usa formato [longitud, latitud]
-    coordenadas = [[origen_lng, origen_lat], [destino_lng, destino_lat]]
-    
-    headers = {
-        "Authorization": ORS_API_KEY,
-        "Content-Type": "application/json",
-        "Accept": "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8"
+    params = {
+        "overview": "full",      # Obtener geometría completa
+        "geometries": "geojson", # Formato GeoJSON
+        "steps": "true",         # Obtener instrucciones paso a paso
+        "alternatives": "false"  # Solo una ruta
     }
     
-    data = {
-        "coordinates": coordenadas,
-        "units": "km",
-        "language": "es",
-        "geometry": "true",
-        "instructions": "true",
-        "elevation": "false"
-    }
-    
-    print(f"🔍 Calculando ruta ORS...")
+    print(f"🔍 Calculando ruta OSRM...")
     print(f"📍 Origen: {origen_lat}, {origen_lng}")
     print(f"📍 Destino: {destino_lat}, {destino_lng}")
     
     try:
-        # Aumentar timeout y usar verify=False para evitar problemas SSL
-        response = requests.post(
-            url, 
-            json=data, 
-            headers=headers, 
-            timeout=60,
-            verify=True
-        )
+        response = requests.get(url, params=params, timeout=30)
+        data = response.json()
         
         print(f"📡 Código de respuesta: {response.status_code}")
         
-        if response.status_code == 200:
-            resultado = response.json()
+        if response.status_code == 200 and data.get('code') == 'Ok':
+            # Extraer datos de la ruta
+            route = data['routes'][0]
             
-            # Extraer datos
-            feature = resultado['features'][0]
-            properties = feature['properties']
-            segment = properties['segments'][0]
-            
-            distancia_km = segment['distance'] / 1000
-            tiempo_min = segment['duration'] / 60
+            # Distancia en metros -> kilómetros
+            distancia_km = route['distance'] / 1000
+            # Duración en segundos -> minutos
+            tiempo_min = route['duration'] / 60
+            # Costo estimado
             costo = round(distancia_km * 0.15, 2)
             
-            # Extraer puntos de la ruta
-            geometria = feature['geometry']['coordinates']
+            # Extraer puntos de la geometría
+            geometria = route['geometry']['coordinates']
+            # Convertir de [lng, lat] a [lat, lng] para Leaflet
             puntos_ruta = [[coord[1], coord[0]] for coord in geometria]
             
-            # Extraer instrucciones
+            # Extraer instrucciones paso a paso
             instrucciones = []
-            if 'steps' in segment:
-                for step in segment['steps']:
-                    instrucciones.append(step.get('instruction', ''))
+            if 'legs' in route:
+                for leg in route['legs']:
+                    if 'steps' in leg:
+                        for step in leg['steps']:
+                            if 'maneuver' in step and 'instruction' in step['maneuver']:
+                                instrucciones.append(step['maneuver']['instruction'])
             
-            print(f"✅ Ruta calculada: {distancia_km} km, {tiempo_min} min")
+            print(f"✅ Ruta calculada: {distancia_km:.1f} km, {tiempo_min:.0f} min")
             
             return {
                 'distancia_km': round(distancia_km, 1),
@@ -120,42 +100,13 @@ def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
                 'exito': True
             }
         else:
-            error_text = response.text[:500] if response.text else "Sin respuesta"
-            print(f"❌ Error {response.status_code}: {error_text}")
-            
-            # Intentar con verify=False si falla SSL
-            if "SSL" in error_text or "certificate" in error_text:
-                print("🔄 Reintentando con verify=False...")
-                response = requests.post(
-                    url, 
-                    json=data, 
-                    headers=headers, 
-                    timeout=60,
-                    verify=False
-                )
-                if response.status_code == 200:
-                    resultado = response.json()
-                    feature = resultado['features'][0]
-                    segment = feature['properties']['segments'][0]
-                    distancia_km = segment['distance'] / 1000
-                    tiempo_min = segment['duration'] / 60
-                    costo = round(distancia_km * 0.15, 2)
-                    geometria = feature['geometry']['coordinates']
-                    puntos_ruta = [[coord[1], coord[0]] for coord in geometria]
-                    return {
-                        'distancia_km': round(distancia_km, 1),
-                        'tiempo_min': round(tiempo_min),
-                        'costo': costo,
-                        'puntos_ruta': puntos_ruta,
-                        'instrucciones': [],
-                        'exito': True
-                    }
-            
-            return {'exito': False, 'error': f"Error {response.status_code}: {response.text[:200]}"}
+            error_msg = data.get('message', 'Error desconocido')
+            print(f"❌ Error OSRM: {error_msg}")
+            return {'exito': False, 'error': error_msg}
             
     except requests.exceptions.Timeout:
-        print("❌ Timeout - La API tardó demasiado en responder")
-        return {'exito': False, 'error': 'Timeout - La API tardó demasiado'}
+        print("❌ Timeout - OSRM tardó demasiado")
+        return {'exito': False, 'error': 'Timeout de conexión'}
     except requests.exceptions.ConnectionError as e:
         print(f"❌ Error de conexión: {str(e)}")
         return {'exito': False, 'error': f'Error de conexión: {str(e)}'}
@@ -179,7 +130,8 @@ def api_ruta():
     origen_data = ATRACTIVOS[origen]
     destino_data = ATRACTIVOS[destino]
     
-    resultado = calcular_ruta_ors(
+    # Calcular ruta con OSRM
+    resultado = calcular_ruta_osrm(
         origen_data['lat'], origen_data['lng'],
         destino_data['lat'], destino_data['lng']
     )
@@ -218,11 +170,11 @@ def api_dias():
 
 @app.route('/api/test')
 def test_api():
-    """Endpoint de prueba para verificar que la API Key funciona"""
-    test_result = calcular_ruta_ors(8.52, -80.35, 8.42, -80.12)
-    return jsonify(test_result)
+    """Endpoint de prueba para verificar que OSRM funciona"""
+    resultado = calcular_ruta_osrm(8.52, -80.35, 8.42, -80.12)
+    return jsonify(resultado)
 
 if __name__ == '__main__':
     print("🚀 Iniciando servidor...")
-    print("📍 API Key configurada")
+    print("📍 Usando OSRM (gratis, sin API Key)")
     app.run(debug=True)
