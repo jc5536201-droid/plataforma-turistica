@@ -1,173 +1,2477 @@
-from flask import Flask, render_template, request, jsonify
-import requests
-import heapq
-import math
+<!DOCTYPE html>
+<html lang="es">
 
-app = Flask(__name__)
+<head>
 
-# ============================================================
-# DATOS DE LOS ATRACTIVOS (COORDENADAS CORREGIDAS)
-# ============================================================
-ATRACTIVOS = {
-    1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa", "lat": 8.3976, "lng": -80.1148},
-    2: {"nombre": "Playa Farallón", "cod": "PFA", "tipo": "Playa", "lat": 8.3782, "lng": -80.1275},
-    3: {"nombre": "Playa El Salado", "cod": "PES", "tipo": "Playa", "lat": 8.1990, "lng": -80.5460},
-    4: {"nombre": "Playa Blanca", "cod": "PBL", "tipo": "Playa", "lat": 8.3480, "lng": -80.0875},
-    5: {"nombre": "Playa Juan Hombrón", "cod": "PJH", "tipo": "Playa", "lat": 8.2985, "lng": -80.0670},
-    6: {"nombre": "Mercado Artesanía Valle Antón", "cod": "MAV", "tipo": "Cultural", "lat": 8.6185, "lng": -80.1270},
-    7: {"nombre": "Serpentario Maravillas Tropicales", "cod": "SMT", "tipo": "Naturaleza", "lat": 8.6280, "lng": -80.1370},
-    8: {"nombre": "Museo Hermanos Arias Madrid", "cod": "MHA", "tipo": "Cultural/Hist.", "lat": 8.5185, "lng": -80.3575},
-    9: {"nombre": "P.N. Omar Torrijos", "cod": "PNT", "tipo": "Parque Nacional", "lat": 8.5480, "lng": -80.5870},
-    10: {"nombre": "Sitio Arqueológico El Caño", "cod": "SAC", "tipo": "Arqueológico", "lat": 8.3985, "lng": -80.5170},
-    11: {"nombre": "Museo Regional Stella Sierra", "cod": "MSS", "tipo": "Cultural/Hist.", "lat": 8.2485, "lng": -80.5470},
-    12: {"nombre": "Iglesia San Juan Bautista", "cod": "ISJ", "tipo": "Histórico", "lat": 8.5180, "lng": -80.3570},
-    13: {"nombre": "El Chorro Las Yayas", "cod": "CLY", "tipo": "Cascada", "lat": 8.5485, "lng": -80.6770},
-    14: {"nombre": "Balneario Las Mendozas", "cod": "BLM", "tipo": "Balneario", "lat": 8.5180, "lng": -80.3270},
-    15: {"nombre": "Penonomé", "cod": "PEN", "tipo": "Hub/Ciudad", "lat": 8.5185, "lng": -80.3475},
-    16: {"nombre": "Aguadulce", "cod": "AGU", "tipo": "Hub/Ciudad", "lat": 8.2385, "lng": -80.5470},
-    17: {"nombre": "Antón", "cod": "ANT", "tipo": "Hub/Ciudad", "lat": 8.3985, "lng": -80.2575},
-    18: {"nombre": "La Pintada", "cod": "LAP", "tipo": "Hub/Ciudad", "lat": 8.5985, "lng": -80.4370},
-    19: {"nombre": "Natá", "cod": "NAT", "tipo": "Hub/Ciudad", "lat": 8.3285, "lng": -80.5170},
-    20: {"nombre": "Parroquia Ntra. Sra. Candelaria", "cod": "PNC", "tipo": "Histórico", "lat": 8.5980, "lng": -80.4370},
-    21: {"nombre": "Cerro Gaital", "cod": "CGA", "tipo": "Montaña", "lat": 8.6185, "lng": -80.1170},
-    22: {"nombre": "Museo de Penonomé", "cod": "MPE", "tipo": "Cultural", "lat": 8.5180, "lng": -80.3470},
-    23: {"nombre": "Mercado Artesanías La Pintada", "cod": "MLA", "tipo": "Cultural", "lat": 8.5985, "lng": -80.4375},
-    24: {"nombre": "Balneario Los Algarrobos", "cod": "BAL", "tipo": "Naturaleza", "lat": 8.5980, "lng": -80.4370},
-    25: {"nombre": "Iglesia Santiago Apóstol", "cod": "ISA", "tipo": "Histórico", "lat": 8.3280, "lng": -80.5175},
-    26: {"nombre": "Ecoparque Don Arcelio", "cod": "ECO", "tipo": "Naturaleza", "lat": 8.3285, "lng": -80.5170},
-    27: {"nombre": "Salinas de Aguadulce", "cod": "SAL", "tipo": "Naturaleza", "lat": 8.2380, "lng": -80.5475},
-    28: {"nombre": "Mariposario", "cod": "MAR", "tipo": "Naturaleza", "lat": 8.3980, "lng": -80.2570},
-    29: {"nombre": "Canopy Adventure", "cod": "CAN", "tipo": "Aventura", "lat": 8.3985, "lng": -80.2570},
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Rutas Turísticas - Coclé, Panamá
+    </title>
+
+    <!-- Bootstrap -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        rel="stylesheet">
+
+    <!-- Leaflet -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+    <!-- Font Awesome -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+
+    <style>
+
+        :root {
+
+            --verde: #1D9E75;
+            --azul: #2E86C1;
+            --oscuro: #1F4E79;
+            --morado: #6C3CE1;
+
+        }
+
+
+        * {
+
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+
+        }
+
+
+        body {
+
+            font-family:
+                'Segoe UI',
+                Tahoma,
+                Geneva,
+                Verdana,
+                sans-serif;
+
+            background: #f0f4f8;
+
+        }
+
+
+        /* HEADER */
+
+        .header {
+
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--oscuro),
+                    var(--verde)
+                );
+
+            padding: 20px 0;
+
+            color: white;
+
+            box-shadow:
+                0 4px 20px rgba(0,0,0,0.3);
+
+        }
+
+
+        .header h1 {
+
+            font-weight: 700;
+
+            font-size: 2rem;
+
+        }
+
+
+        .subtitulo {
+
+            color:
+                rgba(255,255,255,0.85);
+
+        }
+
+
+        /* ESTADÍSTICAS */
+
+        .stat-card {
+
+            background: white;
+
+            border-radius: 15px;
+
+            padding: 15px 20px;
+
+            box-shadow:
+                0 4px 15px rgba(0,0,0,0.08);
+
+            border-left:
+                5px solid var(--verde);
+
+            transition:
+                transform 0.3s,
+                box-shadow 0.3s;
+
+        }
+
+
+        .stat-card:hover {
+
+            transform:
+                translateY(-5px);
+
+            box-shadow:
+                0 8px 25px
+                rgba(0,0,0,0.15);
+
+        }
+
+
+        .stat-card .icono {
+
+            font-size: 2rem;
+
+            margin-right: 15px;
+
+        }
+
+
+        .stat-card .numero {
+
+            font-size: 1.8rem;
+
+            font-weight: 700;
+
+            color: var(--oscuro);
+
+        }
+
+
+        .stat-card .etiqueta {
+
+            font-size: 0.8rem;
+
+            color: #6c757d;
+
+            text-transform:
+                uppercase;
+
+            letter-spacing:
+                0.5px;
+
+        }
+
+
+        /* MAPA */
+
+        #mapa {
+
+            height: 480px;
+
+            border-radius: 15px;
+
+            border: 3px solid white;
+
+            box-shadow:
+                0 4px 20px
+                rgba(0,0,0,0.1);
+
+            z-index: 1;
+
+        }
+
+
+        /* VOZ */
+
+        .btn-voz {
+
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--morado),
+                    #9B59B6
+                );
+
+            color: white;
+
+            border: none;
+
+            padding:
+                12px 25px;
+
+            border-radius:
+                50px;
+
+            font-weight: 600;
+
+            transition:
+                all 0.3s ease;
+
+            box-shadow:
+                0 4px 15px
+                rgba(108,60,225,0.4);
+
+        }
+
+
+        .btn-voz:hover {
+
+            transform:
+                scale(1.05);
+
+            color: white;
+
+        }
+
+
+        .btn-voz.escuchando {
+
+            animation:
+                pulso 1.5s infinite;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #E74C3C,
+                    #C0392B
+                );
+
+        }
+
+
+        @keyframes pulso {
+
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+
+        }
+
+
+        /* CALCULAR */
+
+        .btn-calcular {
+
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--verde),
+                    #157a5a
+                );
+
+            color: white;
+
+            border: none;
+
+            padding:
+                12px 35px;
+
+            border-radius:
+                50px;
+
+            font-weight: 700;
+
+            font-size:
+                1.1rem;
+
+            width: 100%;
+
+            transition:
+                all 0.3s ease;
+
+            box-shadow:
+                0 4px 15px
+                rgba(29,158,117,0.4);
+
+        }
+
+
+        .btn-calcular:hover {
+
+            transform:
+                scale(1.02);
+
+            color: white;
+
+        }
+
+
+        /* CRITERIOS */
+
+        .criterio-badge {
+
+            padding:
+                8px 16px;
+
+            border-radius:
+                20px;
+
+            font-weight:
+                600;
+
+            cursor:
+                pointer;
+
+            border:
+                2px solid transparent;
+
+            transition:
+                all 0.3s ease;
+
+            background:
+                white;
+
+            font-size:
+                0.9rem;
+
+        }
+
+
+        .criterio-badge:hover {
+
+            transform:
+                scale(1.05);
+
+        }
+
+
+        .criterio-badge.active {
+
+            border-color:
+                var(--verde);
+
+            background:
+                rgba(
+                    29,
+                    158,
+                    117,
+                    0.1
+                );
+
+            color:
+                var(--verde);
+
+        }
+
+
+        /* PANEL */
+
+        .ruta-info {
+
+            background:
+                white;
+
+            border-radius:
+                15px;
+
+            padding:
+                20px;
+
+            box-shadow:
+                0 4px 15px
+                rgba(0,0,0,0.08);
+
+            max-height:
+                480px;
+
+            overflow-y:
+                auto;
+
+        }
+
+
+        .ruta-info::-webkit-scrollbar {
+
+            width: 5px;
+
+        }
+
+
+        .ruta-info::-webkit-scrollbar-track {
+
+            background:
+                #f0f4f8;
+
+            border-radius:
+                10px;
+
+        }
+
+
+        .ruta-info::-webkit-scrollbar-thumb {
+
+            background:
+                var(--verde);
+
+            border-radius:
+                10px;
+
+        }
+
+
+        .ruta-info .paso {
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            padding:
+                8px 12px;
+
+            border-radius:
+                8px;
+
+        }
+
+
+        .ruta-info .paso .indice {
+
+            width:
+                28px;
+
+            height:
+                28px;
+
+            border-radius:
+                50%;
+
+            background:
+                var(--verde);
+
+            color:
+                white;
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                center;
+
+            font-weight:
+                700;
+
+            font-size:
+                0.75rem;
+
+            margin-right:
+                12px;
+
+            flex-shrink:
+                0;
+
+        }
+
+
+        /* DÍAS */
+
+        .card-dia {
+
+            border-radius:
+                15px;
+
+            cursor:
+                pointer;
+
+            transition:
+                transform 0.2s,
+                box-shadow 0.2s;
+
+            border:
+                none;
+
+            box-shadow:
+                0 2px 10px
+                rgba(0,0,0,0.06);
+
+        }
+
+
+        .card-dia:hover {
+
+            transform:
+                scale(1.04);
+
+            box-shadow:
+                0 8px 25px
+                rgba(0,0,0,0.12);
+
+        }
+
+
+        /* FOOTER */
+
+        .footer {
+
+            background:
+                var(--oscuro);
+
+            color:
+                rgba(255,255,255,0.7);
+
+            padding:
+                30px 0;
+
+            margin-top:
+                50px;
+
+        }
+
+
+        /* SELECT */
+
+        .form-select-custom {
+
+            border-radius:
+                10px;
+
+            border:
+                2px solid #e0e0e0;
+
+            padding:
+                10px 15px;
+
+            font-weight:
+                500;
+
+        }
+
+
+        .badge-api {
+
+            background:
+                #6C3CE1;
+
+            color:
+                white;
+
+            font-size:
+                0.7rem;
+
+            padding:
+                3px 10px;
+
+            border-radius:
+                12px;
+
+        }
+
+
+        .badge-dijkstra {
+
+            background:
+                #1D9E75;
+
+            color:
+                white;
+
+            font-size:
+                0.7rem;
+
+            padding:
+                3px 10px;
+
+            border-radius:
+                12px;
+
+        }
+
+
+        @media (max-width: 768px) {
+
+            #mapa {
+                height: 320px;
+            }
+
+            .stat-card .numero {
+                font-size: 1.3rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<!-- ========================================================
+     HEADER
+========================================================= -->
+
+<header class="header">
+
+    <div class="container">
+
+        <div class="row align-items-center">
+
+            <div class="col-md-8">
+
+                <h1>
+
+                    <i class="fas fa-map-marked-alt me-2"></i>
+
+                    Rutas Turísticas de Coclé
+
+                </h1>
+
+
+                <p class="subtitulo mb-0">
+
+                    <i class="fas fa-route me-1"></i>
+
+                    Optimización mediante el algoritmo de Dijkstra
+
+                    ·
+
+                    <span class="badge-dijkstra">
+
+                        Dijkstra
+
+                    </span>
+
+                    <span class="badge-api">
+
+                        OSRM + OpenStreetMap
+
+                    </span>
+
+                </p>
+
+            </div>
+
+
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+
+                <button
+                    class="btn-voz"
+                    id="btnVoz"
+                    onclick="hablar()">
+
+                    <i class="fas fa-volume-up me-2"></i>
+
+                    Escuchar ruta
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</header>
+
+
+<!-- ========================================================
+     CONTENIDO
+========================================================= -->
+
+<main class="container py-4">
+
+
+    <!-- ESTADÍSTICAS -->
+
+    <div class="row g-3 mb-4">
+
+
+        <div class="col-6 col-md-3">
+
+            <div class="stat-card d-flex align-items-center">
+
+                <i class="fas fa-route icono text-success"></i>
+
+                <div>
+
+                    <div
+                        class="numero"
+                        id="totalDistancia">
+
+                        --
+
+                    </div>
+
+                    <div class="etiqueta">
+
+                        Distancia total
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-6 col-md-3">
+
+            <div
+                class="stat-card d-flex align-items-center"
+                style="border-left-color:var(--azul);">
+
+                <i
+                    class="fas fa-clock icono"
+                    style="color:var(--azul);">
+                </i>
+
+                <div>
+
+                    <div
+                        class="numero"
+                        id="totalTiempo">
+
+                        --
+
+                    </div>
+
+                    <div class="etiqueta">
+
+                        Tiempo estimado
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-6 col-md-3">
+
+            <div
+                class="stat-card d-flex align-items-center"
+                style="border-left-color:#F39C12;">
+
+                <i
+                    class="fas fa-dollar-sign icono"
+                    style="color:#F39C12;">
+                </i>
+
+                <div>
+
+                    <div
+                        class="numero"
+                        id="totalCosto">
+
+                        --
+
+                    </div>
+
+                    <div class="etiqueta">
+
+                        Costo estimado
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-6 col-md-3">
+
+            <div
+                class="stat-card d-flex align-items-center"
+                style="border-left-color:var(--morado);">
+
+                <i
+                    class="fas fa-location-dot icono"
+                    style="color:var(--morado);">
+                </i>
+
+                <div>
+
+                    <div
+                        class="numero"
+                        id="totalParadas">
+
+                        --
+
+                    </div>
+
+                    <div class="etiqueta">
+
+                        Atractivos visitados
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- SELECTORES -->
+
+    <div class="row g-3 mb-4">
+
+
+        <div class="col-md-4">
+
+            <label class="fw-bold mb-1">
+
+                <i class="fas fa-play text-success me-1"></i>
+
+                Origen
+
+            </label>
+
+
+            <select
+                class="form-select form-select-custom"
+                id="origenSelect">
+
+            </select>
+
+        </div>
+
+
+        <div class="col-md-4">
+
+            <label class="fw-bold mb-1">
+
+                <i class="fas fa-flag-checkered text-danger me-1"></i>
+
+                Destino
+
+            </label>
+
+
+            <select
+                class="form-select form-select-custom"
+                id="destinoSelect">
+
+            </select>
+
+        </div>
+
+
+        <div class="col-md-4">
+
+            <label class="fw-bold mb-1">
+
+                <i class="fas fa-sliders-h text-primary me-1"></i>
+
+                Criterio de optimización
+
+            </label>
+
+
+            <div class="d-flex gap-2 flex-wrap">
+
+
+                <span
+                    class="criterio-badge active"
+                    data-criterio="distancia"
+                    onclick="seleccionarCriterio('distancia')">
+
+                    <i class="fas fa-ruler"></i>
+
+                    Distancia
+
+                </span>
+
+
+                <span
+                    class="criterio-badge"
+                    data-criterio="tiempo"
+                    onclick="seleccionarCriterio('tiempo')">
+
+                    <i class="fas fa-clock"></i>
+
+                    Tiempo
+
+                </span>
+
+
+                <span
+                    class="criterio-badge"
+                    data-criterio="costo"
+                    onclick="seleccionarCriterio('costo')">
+
+                    <i class="fas fa-dollar-sign"></i>
+
+                    Costo
+
+                </span>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- MAPA -->
+
+    <div class="row g-3">
+
+
+        <div class="col-md-8">
+
+
+            <button
+                class="btn-calcular mb-3"
+                onclick="calcularRuta()">
+
+                <i class="fas fa-route me-2"></i>
+
+                Calcular Ruta Óptima con Dijkstra
+
+            </button>
+
+
+            <div id="mapa"></div>
+
+
+        </div>
+
+
+        <div class="col-md-4">
+
+
+            <div
+                class="ruta-info"
+                id="panelRuta">
+
+                <div
+                    class="text-center text-muted py-5">
+
+                    <i
+                        class="fas fa-road fa-3x mb-3 d-block"
+                        style="color:#dce0e5;">
+                    </i>
+
+                    <p>
+
+                        Selecciona origen y destino
+
+                        <br>
+
+                        para calcular la ruta óptima
+
+                    </p>
+
+                    <small>
+
+                        Algoritmo:
+                        <strong>Dijkstra</strong>
+
+                    </small>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ====================================================
+         7 DÍAS
+    ===================================================== -->
+
+    <hr class="my-5">
+
+
+    <h3 class="text-center mb-4">
+
+        <i
+            class="fas fa-calendar-alt text-success me-2">
+        </i>
+
+        Itinerario de 7 Días
+
+    </h3>
+
+
+    <div
+        class="row g-3"
+        id="diasContainer">
+    </div>
+
+
+</main>
+
+
+<!-- FOOTER -->
+
+<footer class="footer">
+
+    <div class="container text-center">
+
+        <p class="mb-0">
+
+            <i class="fas fa-university me-2"></i>
+
+            Universidad de Panamá · Facultad de Informática
+
+            <br>
+
+            <small>
+
+                Optimización de rutas turísticas
+
+                ·
+
+                Algoritmo de Dijkstra
+
+                ·
+
+                2026
+
+            </small>
+
+        </p>
+
+    </div>
+
+</footer>
+
+
+<!-- ========================================================
+     SCRIPTS
+========================================================= -->
+
+<script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js">
+</script>
+
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+
+
+<script>
+
+
+// ============================================================
+// DATOS
+// ============================================================
+
+const ATRACTIVOS =
+    {{ atractivos|tojson }};
+
+
+let criterioActual =
+    'distancia';
+
+
+let mapa = null;
+
+
+let rutaLayer = null;
+
+
+let marcadoresRuta = [];
+
+
+let rutaActual = [];
+
+
+let ultimaRuta = null;
+
+
+// ============================================================
+// INICIALIZAR MAPA
+// ============================================================
+
+function initMapa() {
+
+
+    mapa = L.map('mapa')
+        .setView(
+            [8.45, -80.35],
+            10
+        );
+
+
+    L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+
+            attribution:
+                '© OpenStreetMap contributors',
+
+            maxZoom: 19
+
+        }
+    ).addTo(mapa);
+
+
+    agregarMarcadores();
+
 }
 
-# ============================================================
-# FUNCIÓN PARA CALCULAR DISTANCIA ENTRE DOS PUNTOS (OSRM)
-# ============================================================
-def calcular_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
-    """
-    Calcula la ruta usando OSRM (gratis, sin API Key)
-    """
-    url = f"http://router.project-osrm.org/route/v1/driving/{origen_lng},{origen_lat};{destino_lng},{destino_lat}"
-    
-    params = {
-        "overview": "full",
-        "geometries": "geojson",
-        "steps": "true",
-        "radiuses": "1000;1000"
-    }
-    
-    try:
-        respuesta = requests.get(url, params=params, timeout=30)
-        data = respuesta.json()
-        
-        if respuesta.status_code == 200 and data.get('code') == 'Ok':
-            route = data['routes'][0]
-            
-            distancia_km = route['distance'] / 1000
-            tiempo_min = route['duration'] / 60
-            costo = round(distancia_km * 0.15, 2)
-            
-            geometria = route['geometry']['coordinates']
-            puntos_ruta = [[coord[1], coord[0]] for coord in geometria]
-            
-            instrucciones = []
-            if 'legs' in route:
-                for leg in route['legs']:
-                    if 'steps' in leg:
-                        for step in leg['steps']:
-                            if 'maneuver' in step and 'instruction' in step['maneuver']:
-                                instrucciones.append(step['maneuver']['instruction'])
-            
-            return {
-                'distancia_km': round(distancia_km, 1),
-                'tiempo_min': round(tiempo_min),
-                'costo': costo,
-                'puntos_ruta': puntos_ruta,
-                'instrucciones': instrucciones,
-                'exito': True
+
+// ============================================================
+// MARCADORES
+// ============================================================
+
+function agregarMarcadores() {
+
+
+    const colores = {
+
+        'Playa':
+            '#2E86C1',
+
+        'Cultural':
+            '#F39C12',
+
+        'Cultural/Hist.':
+            '#F39C12',
+
+        'Histórico':
+            '#F39C12',
+
+        'Naturaleza':
+            '#8E44AD',
+
+        'Parque Nacional':
+            '#27AE60',
+
+        'Cascada':
+            '#2980B9',
+
+        'Balneario':
+            '#1ABC9C',
+
+        'Arqueológico':
+            '#C0392B',
+
+        'Montaña':
+            '#27AE60',
+
+        'Aventura':
+            '#E67E22',
+
+        'Hub/Ciudad':
+            '#1D9E75'
+
+    };
+
+
+    for (
+        const [id, data]
+        of Object.entries(ATRACTIVOS)
+    ) {
+
+
+        const color =
+            colores[data.tipo]
+            || '#6c757d';
+
+
+        const marker =
+            L.marker(
+                [
+                    data.lat,
+                    data.lng
+                ],
+                {
+
+                    icon:
+                        L.divIcon({
+
+                            html: `
+
+                                <div style="
+                                    background:${color};
+                                    width:28px;
+                                    height:28px;
+                                    border-radius:50%;
+                                    border:2px solid white;
+                                    box-shadow:
+                                      0 2px 8px
+                                      rgba(0,0,0,0.3);
+                                    display:flex;
+                                    align-items:center;
+                                    justify-content:center;
+                                    font-size:8px;
+                                    font-weight:bold;
+                                    color:white;
+                                ">
+
+                                    ${data.cod}
+
+                                </div>
+
+                            `,
+
+                            iconSize:
+                                [28,28],
+
+                            iconAnchor:
+                                [14,14]
+
+                        })
+
+                }
+
+            )
+            .addTo(mapa);
+
+
+        marker.bindPopup(`
+
+            <strong>
+                ${data.nombre}
+            </strong>
+
+            <br>
+
+            <span class="badge bg-secondary">
+
+                ${data.tipo}
+
+            </span>
+
+            <br>
+
+            <small>
+
+                Código:
+                ${data.cod}
+
+            </small>
+
+        `);
+
+
+        marker.on(
+            'click',
+            function() {
+
+                document
+                    .getElementById(
+                        'destinoSelect'
+                    )
+                    .value = id;
+
+                calcularRuta();
+
             }
-        else:
-            return {'exito': False, 'error': data.get('message', 'Error en OSRM')}
-    except Exception as e:
-        return {'exito': False, 'error': str(e)}
+        );
 
-# ============================================================
-# CALCULAR RUTA DIRECTA ENTRE DOS NODOS
-# ============================================================
-def calcular_ruta_directa(origen_id, destino_id):
-    """Calcula la ruta directamente entre dos puntos"""
-    origen = ATRACTIVOS[origen_id]
-    destino = ATRACTIVOS[destino_id]
-    
-    resultado = calcular_ruta_osrm(
-        origen['lat'], origen['lng'],
-        destino['lat'], destino['lng']
-    )
-    
-    return resultado
+    }
 
-# ============================================================
-# RUTAS DE LA PÁGINA WEB
-# ============================================================
-@app.route('/')
-def index():
-    return render_template('index.html', atractivos=ATRACTIVOS)
+}
 
-@app.route('/api/ruta', methods=['POST'])
-def api_ruta():
-    try:
-        data = request.json
-        origen = int(data['origen'])
-        destino = int(data['destino'])
-        
-        if origen not in ATRACTIVOS or destino not in ATRACTIVOS:
-            return jsonify({'exito': False, 'error': 'Nodo no existe'}), 400
-        
-        if origen == destino:
-            return jsonify({'exito': False, 'error': 'Origen y destino iguales'}), 400
-        
-        # Calcular ruta directa
-        resultado = calcular_ruta_directa(origen, destino)
-        
-        if resultado['exito']:
-            return jsonify({
-                'exito': True,
-                'origen': origen,
-                'destino': destino,
-                'nodo_origen': ATRACTIVOS[origen],
-                'nodo_destino': ATRACTIVOS[destino],
-                'distancia_km': resultado['distancia_km'],
-                'tiempo_min': resultado['tiempo_min'],
-                'costo': resultado['costo'],
-                'puntos_ruta': resultado['puntos_ruta'],
-                'instrucciones': resultado['instrucciones']
-            })
-        else:
-            return jsonify({'exito': False, 'error': resultado.get('error', 'Error al calcular')}), 500
-            
-    except Exception as e:
-        return jsonify({'exito': False, 'error': str(e)}), 500
 
-@app.route('/api/dias')
-def api_dias():
-    dias = [
-        {"dia": 1, "destinos": [1, 2, 4, 5, 17], "zona": "🌊 Playas de Antón"},
-        {"dia": 2, "destinos": [8, 22, 12, 14, 15], "zona": "🏛️ Penonomé Histórico"},
-        {"dia": 3, "destinos": [18, 20, 23, 24, 13, 9], "zona": "⛰️ La Pintada - Montaña"},
-        {"dia": 4, "destinos": [10, 25, 26, 19], "zona": "🏺 Ruta Arqueológica de Natá"},
-        {"dia": 5, "destinos": [6, 7, 28, 21, 29], "zona": "🌿 Naturaleza de Antón"},
-        {"dia": 6, "destinos": [16, 3, 27, 11], "zona": "🌅 Tesoros de Aguadulce"},
-        {"dia": 7, "destinos": [15, 18, 20, 23, 24], "zona": "🎯 Circuito Integrador"},
-    ]
-    return jsonify(dias)
+// ============================================================
+// SELECTORES
+// ============================================================
 
-@app.route('/api/test')
-def test_api():
-    """Prueba que OSRM funciona"""
-    resultado = calcular_ruta_osrm(8.5185, -80.3475, 8.3985, -80.2575)
-    return jsonify(resultado)
+function llenarSelectores() {
 
-if __name__ == '__main__':
-    print("🚀 Iniciando servidor...")
-    print(f"📍 Atractivos: {len(ATRACTIVOS)}")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+
+    const origen =
+        document.getElementById(
+            'origenSelect'
+        );
+
+
+    const destino =
+        document.getElementById(
+            'destinoSelect'
+        );
+
+
+    for (
+        const [id, data]
+        of Object.entries(ATRACTIVOS)
+    ) {
+
+
+        const optOrigen =
+            document.createElement(
+                'option'
+            );
+
+
+        optOrigen.value =
+            id;
+
+
+        optOrigen.textContent =
+            `${data.cod} - ${data.nombre}`;
+
+
+        origen.appendChild(
+            optOrigen
+        );
+
+
+        const optDestino =
+            document.createElement(
+                'option'
+            );
+
+
+        optDestino.value =
+            id;
+
+
+        optDestino.textContent =
+            `${data.cod} - ${data.nombre}`;
+
+
+        destino.appendChild(
+            optDestino
+        );
+
+    }
+
+
+    origen.value =
+        "15";
+
+
+    destino.value =
+        "1";
+
+}
+
+
+// ============================================================
+// CRITERIO
+// ============================================================
+
+function seleccionarCriterio(
+    criterio
+) {
+
+
+    criterioActual =
+        criterio;
+
+
+    document
+        .querySelectorAll(
+            '.criterio-badge'
+        )
+        .forEach(
+            el => {
+
+                el.classList.toggle(
+                    'active',
+                    el.dataset.criterio
+                    === criterio
+                );
+
+            }
+        );
+
+}
+
+
+// ============================================================
+// CALCULAR RUTA
+// ============================================================
+
+async function calcularRuta() {
+
+
+    const origen =
+        parseInt(
+            document
+                .getElementById(
+                    'origenSelect'
+                )
+                .value
+        );
+
+
+    const destino =
+        parseInt(
+            document
+                .getElementById(
+                    'destinoSelect'
+                )
+                .value
+        );
+
+
+    if (
+        origen === destino
+    ) {
+
+        alert(
+            '⚠️ El origen y el destino deben ser diferentes.'
+        );
+
+        return;
+
+    }
+
+
+    const panel =
+        document.getElementById(
+            'panelRuta'
+        );
+
+
+    panel.innerHTML = `
+
+        <div class="text-center py-4">
+
+            <div
+                class="spinner-border text-success"
+                role="status">
+            </div>
+
+            <p class="mt-3 mb-1">
+
+                Ejecutando Dijkstra...
+
+            </p>
+
+            <small class="text-muted">
+
+                Consultando red vial y calculando
+                el camino mínimo.
+
+            </small>
+
+        </div>
+
+    `;
+
+
+    try {
+
+
+        const respuesta =
+            await fetch(
+                '/api/ruta',
+                {
+
+                    method:
+                        'POST',
+
+                    headers:
+                        {
+                            'Content-Type':
+                                'application/json'
+                        },
+
+                    body:
+                        JSON.stringify({
+
+                            origen:
+                                origen,
+
+                            destino:
+                                destino,
+
+                            criterio:
+                                criterioActual
+
+                        })
+
+                }
+            );
+
+
+        const data =
+            await respuesta.json();
+
+
+        if (
+            !respuesta.ok
+            || !data.exito
+        ) {
+
+            throw new Error(
+                data.error
+                || 'No se pudo calcular la ruta.'
+            );
+
+        }
+
+
+        ultimaRuta =
+            data;
+
+
+        rutaActual =
+            Array.isArray(data.camino)
+                ? data.camino
+                : [origen, destino];
+
+
+        dibujarRuta(
+            data
+        );
+
+
+        actualizarEstadisticas(
+            data
+        );
+
+
+        actualizarPanel(
+            data
+        );
+
+
+    }
+
+    catch (error) {
+
+
+        console.error(
+            error
+        );
+
+
+        panel.innerHTML = `
+
+            <div class="alert alert-danger">
+
+                <strong>
+                    Error:
+                </strong>
+
+                ${error.message}
+
+            </div>
+
+        `;
+
+    }
+
+}
+
+
+// ============================================================
+// DIBUJAR RUTA
+// ============================================================
+
+function dibujarRuta(
+    data
+) {
+
+    if (!data || !Array.isArray(data.nodos_ruta)) {
+        console.error('Respuesta de ruta inválida:', data);
+        throw new Error('La respuesta del servidor no contiene nodos_ruta.');
+    }
+
+    if (rutaLayer) {
+
+        mapa.removeLayer(
+            rutaLayer
+        );
+
+        rutaLayer = null;
+
+    }
+
+
+    marcadoresRuta.forEach(
+        marker => {
+
+            mapa.removeLayer(
+                marker
+            );
+
+        }
+    );
+
+
+    marcadoresRuta =
+        [];
+
+
+    // --------------------------------------------------------
+    // LÍNEA DE RUTA
+    // --------------------------------------------------------
+
+    rutaLayer =
+        L.polyline(
+            data.puntos_ruta,
+            {
+
+                color:
+                    '#1D9E75',
+
+                weight:
+                    6,
+
+                opacity:
+                    0.9,
+
+                lineJoin:
+                    'round',
+
+                smoothFactor:
+                    1
+
+            }
+        )
+        .addTo(mapa);
+
+
+    // --------------------------------------------------------
+    // MARCADORES DE LOS NODOS DE DIJKSTRA
+    // --------------------------------------------------------
+
+    data.nodos_ruta.forEach(
+        (nodo, indice) => {
+
+
+            let color =
+                '#1D9E75';
+
+
+            if (
+                indice === 0
+            ) {
+
+                color =
+                    '#2E86C1';
+
+            }
+
+            else if (
+                indice ===
+                data.nodos_ruta.length - 1
+            ) {
+
+                color =
+                    '#E74C3C';
+
+            }
+
+
+            const icono =
+                L.divIcon({
+
+                    html: `
+
+                        <div style="
+                            background:${color};
+                            width:36px;
+                            height:36px;
+                            border-radius:50%;
+                            border:3px solid white;
+                            box-shadow:
+                                0 2px 12px
+                                rgba(0,0,0,0.4);
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            color:white;
+                            font-weight:bold;
+                        ">
+
+                            ${indice + 1}
+
+                        </div>
+
+                    `,
+
+                    iconSize:
+                        [36,36],
+
+                    iconAnchor:
+                        [18,18]
+
+                });
+
+
+            const lat =
+                nodo.lat_carretera
+                ?? nodo.lat;
+
+
+            const lng =
+                nodo.lng_carretera
+                ?? nodo.lng;
+
+
+            const marker =
+                L.marker(
+                    [lat,lng],
+                    {
+                        icon:
+                            icono
+                    }
+                )
+                .addTo(mapa);
+
+
+            marker.bindPopup(`
+
+                <strong>
+
+                    ${indice + 1}.
+                    ${nodo.nombre}
+
+                </strong>
+
+                <br>
+
+                <span class="badge bg-success">
+
+                    ${nodo.cod}
+
+                </span>
+
+                <br>
+
+                <small>
+
+                    Nodo de Dijkstra
+
+                </small>
+
+            `);
+
+
+            marcadoresRuta.push(
+                marker
+            );
+
+        }
+    );
+
+
+    // --------------------------------------------------------
+    // AJUSTAR MAPA
+    // --------------------------------------------------------
+
+    if (
+        rutaLayer
+        &&
+        rutaLayer
+            .getBounds()
+            .isValid()
+    ) {
+
+        mapa.fitBounds(
+            rutaLayer.getBounds(),
+            {
+                padding:
+                    [60,60]
+            }
+        );
+
+    }
+
+}
+
+
+// ============================================================
+// ESTADÍSTICAS
+// ============================================================
+
+function actualizarEstadisticas(
+    data
+) {
+
+
+    document
+        .getElementById(
+            'totalDistancia'
+        )
+        .textContent =
+        `${data.distancia_km} km`;
+
+
+    document
+        .getElementById(
+            'totalTiempo'
+        )
+        .textContent =
+        `${data.tiempo_min} min`;
+
+
+    document
+        .getElementById(
+            'totalCosto'
+        )
+        .textContent =
+        `$${Number(data.costo).toFixed(2)}`;
+
+
+    document
+        .getElementById(
+            'totalParadas'
+        )
+        .textContent =
+        data.nodos_ruta.length;
+
+}
+
+
+// ============================================================
+// PANEL
+// ============================================================
+
+function actualizarPanel(data) {
+
+    const panel = document.getElementById('panelRuta');
+
+    const nombresCriterio = {
+        distancia: 'Distancia mínima',
+        tiempo: 'Tiempo mínimo',
+        costo: 'Costo mínimo'
+    };
+
+    const nombreCriterio =
+        nombresCriterio[data.criterio] ||
+        data.criterio ||
+        'Criterio seleccionado';
+
+    let html = `
+        <h6 class="fw-bold text-success mb-3">
+            <i class="fas fa-route me-2"></i>
+            Ruta óptima
+            <span class="badge bg-success ms-2">Dijkstra</span>
+        </h6>
+
+        <div class="alert alert-light border">
+            <strong>Criterio:</strong>
+            ${nombreCriterio}
+        </div>
+
+        <div class="mb-3">
+            <div class="d-flex justify-content-between">
+                <span>
+                    <i class="fas fa-road text-success"></i>
+                    ${Number(data.distancia_km).toFixed(2)} km
+                </span>
+
+                <span>
+                    <i class="fas fa-clock text-primary"></i>
+                    ${Number(data.tiempo_min).toFixed(0)} min
+                </span>
+
+                <span>
+                    <i class="fas fa-dollar-sign text-warning"></i>
+                    $${Number(data.costo).toFixed(2)}
+                </span>
+            </div>
+        </div>
+
+        <div class="border-top pt-3">
+            <p class="mb-1">
+                <strong>Origen:</strong>
+                ${data.nodos_ruta?.[0]?.nombre || 'No disponible'}
+            </p>
+
+            <p class="mb-1">
+                <strong>Destino:</strong>
+                ${data.nodos_ruta?.[data.nodos_ruta.length - 1]?.nombre || 'No disponible'}
+            </p>
+        </div>
+
+        <hr>
+
+        <h6 class="fw-bold">
+            Camino encontrado por Dijkstra
+        </h6>
+    `;
+
+    // Nodos de la ruta
+    if (Array.isArray(data.nodos_ruta)) {
+        data.nodos_ruta.forEach((nodo, indice) => {
+
+            html += `
+                <div class="paso"
+                     style="background:#f8f9fa; margin-top:5px;">
+
+                    <span class="indice">
+                        ${indice + 1}
+                    </span>
+
+                    <div>
+                        <strong>${nodo.nombre}</strong>
+                        <br>
+                        <small class="text-muted">
+                            Nodo: ${nodo.cod}
+                        </small>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // Segmentos de la ruta
+    if (Array.isArray(data.segmentos) && data.segmentos.length > 0) {
+
+        html += `
+            <hr>
+            <h6 class="fw-bold">
+                Detalle de los tramos
+            </h6>
+        `;
+
+        data.segmentos.forEach((tramo, indice) => {
+
+            const origen =
+                data.nodos_ruta.find(
+                    n => Number(n.id) === Number(tramo.origen)
+                );
+
+            const destino =
+                data.nodos_ruta.find(
+                    n => Number(n.id) === Number(tramo.destino)
+                );
+
+            html += `
+                <div class="border rounded p-2 mb-2">
+                    <small>
+                        <strong>${indice + 1}.</strong>
+                        ${origen?.nombre || 'Origen'}
+                        →
+                        ${destino?.nombre || 'Destino'}
+                    </small>
+                    <br>
+                    <small class="text-muted">
+                        ${Number(tramo.distancia_km).toFixed(2)} km
+                        ·
+                        ${Number(tramo.tiempo_min).toFixed(1)} min
+                        ·
+                        $${Number(tramo.costo).toFixed(2)}
+                    </small>
+                </div>
+            `;
+        });
+    }
+
+    panel.innerHTML = html;
+}
+
+
+// ============================================================
+// VOZ
+
+// ============================================================
+
+let vozActiva =
+    false;
+
+
+function hablar() {
+
+
+    if (
+        !window.speechSynthesis
+    ) {
+
+        alert(
+            'Tu navegador no soporta síntesis de voz.'
+        );
+
+        return;
+
+    }
+
+
+    const btn =
+        document.getElementById(
+            'btnVoz'
+        );
+
+
+    if (vozActiva) {
+
+        window.speechSynthesis.cancel();
+
+        vozActiva =
+            false;
+
+        btn.classList.remove(
+            'escuchando'
+        );
+
+        btn.innerHTML =
+            '<i class="fas fa-volume-up me-2"></i>Escuchar ruta';
+
+        return;
+
+    }
+
+
+    if (!ultimaRuta) {
+
+        alert(
+            'Primero calcula una ruta.'
+        );
+
+        return;
+
+    }
+
+
+    const origen =
+        ultimaRuta.nodos_ruta?.[0]?.nombre
+        || 'el punto de origen';
+
+
+    const destino =
+        ultimaRuta.nodos_ruta?.[
+            ultimaRuta.nodos_ruta.length - 1
+        ]?.nombre
+        || 'el punto de destino';
+
+
+    const distancia =
+        ultimaRuta.distancia_km;
+
+
+    const tiempo =
+        ultimaRuta.tiempo_min;
+
+
+    const nombresCriterio = {
+        distancia: 'distancia mínima',
+        tiempo: 'tiempo mínimo',
+        costo: 'costo mínimo'
+    };
+
+    const criterio =
+        nombresCriterio[ultimaRuta.criterio]
+        || ultimaRuta.criterio
+        || 'criterio seleccionado';
+
+
+    const mensaje =
+
+        `Ruta turística por la provincia de Coclé, Panamá. ` +
+
+        `Utilizando el algoritmo de Dijkstra, ` +
+
+        `se seleccionó la ruta óptima según el criterio de ` +
+
+        `${criterio}. ` +
+
+        `El recorrido inicia en ${origen} ` +
+
+        `y termina en ${destino}. ` +
+
+        `La distancia total es de ${distancia} kilómetros ` +
+
+        `y el tiempo estimado es de ${tiempo} minutos. ` +
+
+        `¡Disfruta tu recorrido!`;
+
+
+    const utterance =
+        new SpeechSynthesisUtterance(
+            mensaje
+        );
+
+
+    utterance.lang =
+        'es-PA';
+
+
+    utterance.rate =
+        0.9;
+
+
+    utterance.pitch =
+        1;
+
+
+    const voces =
+        window.speechSynthesis
+            .getVoices();
+
+
+    const vozEspanol =
+        voces.find(
+            voz =>
+                voz.lang
+                    .toLowerCase()
+                    .startsWith('es')
+        );
+
+
+    if (
+        vozEspanol
+    ) {
+
+        utterance.voice =
+            vozEspanol;
+
+    }
+
+
+    utterance.onstart =
+        () => {
+
+            vozActiva =
+                true;
+
+            btn.classList.add(
+                'escuchando'
+            );
+
+            btn.innerHTML =
+                '<i class="fas fa-stop me-2"></i>Detener';
+
+        };
+
+
+    utterance.onend =
+        () => {
+
+            vozActiva =
+                false;
+
+            btn.classList.remove(
+                'escuchando'
+            );
+
+            btn.innerHTML =
+                '<i class="fas fa-volume-up me-2"></i>Escuchar ruta';
+
+        };
+
+
+    utterance.onerror =
+        () => {
+
+            vozActiva =
+                false;
+
+            btn.classList.remove(
+                'escuchando'
+            );
+
+            btn.innerHTML =
+                '<i class="fas fa-volume-up me-2"></i>Escuchar ruta';
+
+        };
+
+
+    window.speechSynthesis.speak(
+        utterance
+    );
+
+}
+
+
+// ============================================================
+// CARGAR DÍAS
+// ============================================================
+
+async function cargarDias() {
+
+
+    try {
+
+
+        const respuesta =
+            await fetch(
+                '/api/dias'
+            );
+
+
+        const dias =
+            await respuesta.json();
+
+
+        const container =
+            document.getElementById(
+                'diasContainer'
+            );
+
+
+        container.innerHTML =
+            '';
+
+
+        dias.forEach(
+            dia => {
+
+
+                const destinosStr =
+                    dia.destinos
+                        .map(
+                            id =>
+                                ATRACTIVOS[id].cod
+                        )
+                        .join(
+                            ' → '
+                        );
+
+
+                container.innerHTML += `
+
+                    <div
+                        class="col-md-3 col-6">
+
+                        <div
+                            class="card card-dia shadow-sm"
+                            onclick="
+                                cargarDia(
+                                    ${dia.dia}
+                                )
+                            ">
+
+                            <div
+                                class="card-body text-center p-3">
+
+                                <span
+                                    class="
+                                        badge
+                                        bg-success
+                                        rounded-pill
+                                        mb-2
+                                    ">
+
+                                    Día ${dia.dia}
+
+                                </span>
+
+
+                                <h6
+                                    class="card-title mb-1"
+                                    style="
+                                        font-size:0.9rem;
+                                    ">
+
+                                    ${dia.zona}
+
+                                </h6>
+
+
+                                <small
+                                    class="text-muted"
+                                    style="
+                                        font-size:0.7rem;
+                                    ">
+
+                                    ${destinosStr}
+
+                                </small>
+
+
+                                <div
+                                    class="mt-2">
+
+                                    <span
+                                        class="
+                                            badge
+                                            bg-light
+                                            text-dark
+                                        ">
+
+                                        ${dia.destinos.length}
+                                        lugares
+
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                `;
+
+            }
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            'Error cargando días:',
+            error
+        );
+
+    }
+
+}
+
+
+// ============================================================
+// CARGAR UN DÍA
+// ============================================================
+
+function cargarDia(
+    dia
+) {
+
+
+    const diasMap = {
+
+        1:
+            [1,2,4,5,17],
+
+        2:
+            [8,22,12,14,15],
+
+        3:
+            [18,20,23,24,13,9],
+
+        4:
+            [10,25,26,19],
+
+        5:
+            [6,7,28,21,29],
+
+        6:
+            [16,3,27,11],
+
+        7:
+            [15,18,20,23,24]
+
+    };
+
+
+    const destinos =
+        diasMap[dia];
+
+
+    if (
+        destinos
+        &&
+        destinos.length >= 2
+    ) {
+
+
+        document
+            .getElementById(
+                'origenSelect'
+            )
+            .value =
+            destinos[0];
+
+
+        document
+            .getElementById(
+                'destinoSelect'
+            )
+            .value =
+            destinos[
+                destinos.length - 1
+            ];
+
+
+        calcularRuta();
+
+    }
+
+}
+
+
+// ============================================================
+// INICIO
+// ============================================================
+
+document.addEventListener(
+    'DOMContentLoaded',
+    function() {
+
+
+        console.log(
+            '================================'
+        );
+
+
+        console.log(
+            'Plataforma de rutas de Coclé'
+        );
+
+
+        console.log(
+            'Algoritmo: Dijkstra'
+        );
+
+
+        console.log(
+            'Atractivos:',
+            Object.keys(
+                ATRACTIVOS
+            ).length
+        );
+
+
+        console.log(
+            '================================'
+        );
+
+
+        llenarSelectores();
+
+
+        initMapa();
+
+
+        cargarDias();
+
+
+        if (
+            window.speechSynthesis
+        ) {
+
+            window.speechSynthesis
+                .getVoices();
+
+            window.speechSynthesis
+                .onvoiceschanged =
+                () => {
+
+                    window.speechSynthesis
+                        .getVoices();
+
+                };
+
+        }
+
+    }
+);
+
+</script>
+
+
+</body>
+
+</html>
