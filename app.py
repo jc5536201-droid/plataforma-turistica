@@ -1,68 +1,115 @@
 from flask import Flask, render_template, request, jsonify
 import requests
 import json
+import math
 
 app = Flask(__name__)
 
-# ===== DATOS DE LOS ATRACTIVOS CON COORDENADAS CORREGIDAS =====
-# Ahora las coordenadas están ajustadas para que OSRM las reconozca
+# ===== DATOS DE LOS ATRACTIVOS (COORDENADAS APROXIMADAS) =====
 ATRACTIVOS = {
-    1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa", "lat": 8.3978, "lng": -80.1150},
-    2: {"nombre": "Playa Farallón", "cod": "PFA", "tipo": "Playa", "lat": 8.3785, "lng": -80.1280},
-    3: {"nombre": "Playa El Salado", "cod": "PES", "tipo": "Playa", "lat": 8.1980, "lng": -80.5480},
-    4: {"nombre": "Playa Blanca", "cod": "PBL", "tipo": "Playa", "lat": 8.3480, "lng": -80.0880},
-    5: {"nombre": "Playa Juan Hombrón", "cod": "PJH", "tipo": "Playa", "lat": 8.2980, "lng": -80.0680},
-    6: {"nombre": "Mercado Artesanía Valle Antón", "cod": "MAV", "tipo": "Cultural", "lat": 8.6180, "lng": -80.1280},
-    7: {"nombre": "Serpentario Maravillas Tropicales", "cod": "SMT", "tipo": "Naturaleza", "lat": 8.6280, "lng": -80.1380},
-    8: {"nombre": "Museo Hermanos Arias Madrid", "cod": "MHA", "tipo": "Cultural/Hist.", "lat": 8.5180, "lng": -80.3580},
-    9: {"nombre": "P.N. Omar Torrijos", "cod": "PNT", "tipo": "Parque Nacional", "lat": 8.5480, "lng": -80.5880},
-    10: {"nombre": "Sitio Arqueológico El Caño", "cod": "SAC", "tipo": "Arqueológico", "lat": 8.3980, "lng": -80.5180},
-    11: {"nombre": "Museo Regional Stella Sierra", "cod": "MSS", "tipo": "Cultural/Hist.", "lat": 8.2480, "lng": -80.5480},
-    12: {"nombre": "Iglesia San Juan Bautista", "cod": "ISJ", "tipo": "Histórico", "lat": 8.5180, "lng": -80.3580},
-    13: {"nombre": "El Chorro Las Yayas", "cod": "CLY", "tipo": "Cascada", "lat": 8.5480, "lng": -80.6780},
-    14: {"nombre": "Balneario Las Mendozas", "cod": "BLM", "tipo": "Balneario", "lat": 8.5180, "lng": -80.3280},
-    15: {"nombre": "Penonomé", "cod": "PEN", "tipo": "Hub/Ciudad", "lat": 8.5180, "lng": -80.3480},
-    16: {"nombre": "Aguadulce", "cod": "AGU", "tipo": "Hub/Ciudad", "lat": 8.2380, "lng": -80.5480},
-    17: {"nombre": "Antón", "cod": "ANT", "tipo": "Hub/Ciudad", "lat": 8.3980, "lng": -80.2580},
-    18: {"nombre": "La Pintada", "cod": "LAP", "tipo": "Hub/Ciudad", "lat": 8.5980, "lng": -80.4380},
-    19: {"nombre": "Natá", "cod": "NAT", "tipo": "Hub/Ciudad", "lat": 8.3280, "lng": -80.5180},
-    20: {"nombre": "Parroquia Ntra. Sra. Candelaria", "cod": "PNC", "tipo": "Histórico", "lat": 8.5980, "lng": -80.4380},
-    21: {"nombre": "Cerro Gaital", "cod": "CGA", "tipo": "Montaña", "lat": 8.6180, "lng": -80.1180},
-    22: {"nombre": "Museo de Penonomé", "cod": "MPE", "tipo": "Cultural", "lat": 8.5180, "lng": -80.3480},
-    23: {"nombre": "Mercado Artesanías La Pintada", "cod": "MLA", "tipo": "Cultural", "lat": 8.5980, "lng": -80.4380},
-    24: {"nombre": "Balneario Los Algarrobos", "cod": "BAL", "tipo": "Naturaleza", "lat": 8.5980, "lng": -80.4380},
-    25: {"nombre": "Iglesia Santiago Apóstol", "cod": "ISA", "tipo": "Histórico", "lat": 8.3280, "lng": -80.5180},
-    26: {"nombre": "Ecoparque Don Arcelio", "cod": "ECO", "tipo": "Naturaleza", "lat": 8.3280, "lng": -80.5180},
-    27: {"nombre": "Salinas de Aguadulce", "cod": "SAL", "tipo": "Naturaleza", "lat": 8.2380, "lng": -80.5480},
-    28: {"nombre": "Mariposario", "cod": "MAR", "tipo": "Naturaleza", "lat": 8.3980, "lng": -80.2580},
-    29: {"nombre": "Canopy Adventure", "cod": "CAN", "tipo": "Aventura", "lat": 8.3980, "lng": -80.2580},
+    1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa", "lat": 8.42, "lng": -80.12},
+    2: {"nombre": "Playa Farallón", "cod": "PFA", "tipo": "Playa", "lat": 8.38, "lng": -80.13},
+    3: {"nombre": "Playa El Salado", "cod": "PES", "tipo": "Playa", "lat": 8.20, "lng": -80.55},
+    4: {"nombre": "Playa Blanca", "cod": "PBL", "tipo": "Playa", "lat": 8.35, "lng": -80.09},
+    5: {"nombre": "Playa Juan Hombrón", "cod": "PJH", "tipo": "Playa", "lat": 8.30, "lng": -80.07},
+    6: {"nombre": "Mercado Artesanía Valle Antón", "cod": "MAV", "tipo": "Cultural", "lat": 8.62, "lng": -80.13},
+    7: {"nombre": "Serpentario Maravillas Tropicales", "cod": "SMT", "tipo": "Naturaleza", "lat": 8.63, "lng": -80.14},
+    8: {"nombre": "Museo Hermanos Arias Madrid", "cod": "MHA", "tipo": "Cultural/Hist.", "lat": 8.52, "lng": -80.36},
+    9: {"nombre": "P.N. Omar Torrijos", "cod": "PNT", "tipo": "Parque Nacional", "lat": 8.55, "lng": -80.59},
+    10: {"nombre": "Sitio Arqueológico El Caño", "cod": "SAC", "tipo": "Arqueológico", "lat": 8.40, "lng": -80.52},
+    11: {"nombre": "Museo Regional Stella Sierra", "cod": "MSS", "tipo": "Cultural/Hist.", "lat": 8.25, "lng": -80.55},
+    12: {"nombre": "Iglesia San Juan Bautista", "cod": "ISJ", "tipo": "Histórico", "lat": 8.52, "lng": -80.36},
+    13: {"nombre": "El Chorro Las Yayas", "cod": "CLY", "tipo": "Cascada", "lat": 8.55, "lng": -80.68},
+    14: {"nombre": "Balneario Las Mendozas", "cod": "BLM", "tipo": "Balneario", "lat": 8.52, "lng": -80.33},
+    15: {"nombre": "Penonomé", "cod": "PEN", "tipo": "Hub/Ciudad", "lat": 8.52, "lng": -80.35},
+    16: {"nombre": "Aguadulce", "cod": "AGU", "tipo": "Hub/Ciudad", "lat": 8.24, "lng": -80.55},
+    17: {"nombre": "Antón", "cod": "ANT", "tipo": "Hub/Ciudad", "lat": 8.40, "lng": -80.26},
+    18: {"nombre": "La Pintada", "cod": "LAP", "tipo": "Hub/Ciudad", "lat": 8.60, "lng": -80.44},
+    19: {"nombre": "Natá", "cod": "NAT", "tipo": "Hub/Ciudad", "lat": 8.33, "lng": -80.52},
+    20: {"nombre": "Parroquia Ntra. Sra. Candelaria", "cod": "PNC", "tipo": "Histórico", "lat": 8.60, "lng": -80.44},
+    21: {"nombre": "Cerro Gaital", "cod": "CGA", "tipo": "Montaña", "lat": 8.62, "lng": -80.12},
+    22: {"nombre": "Museo de Penonomé", "cod": "MPE", "tipo": "Cultural", "lat": 8.52, "lng": -80.35},
+    23: {"nombre": "Mercado Artesanías La Pintada", "cod": "MLA", "tipo": "Cultural", "lat": 8.60, "lng": -80.44},
+    24: {"nombre": "Balneario Los Algarrobos", "cod": "BAL", "tipo": "Naturaleza", "lat": 8.60, "lng": -80.44},
+    25: {"nombre": "Iglesia Santiago Apóstol", "cod": "ISA", "tipo": "Histórico", "lat": 8.33, "lng": -80.52},
+    26: {"nombre": "Ecoparque Don Arcelio", "cod": "ECO", "tipo": "Naturaleza", "lat": 8.33, "lng": -80.52},
+    27: {"nombre": "Salinas de Aguadulce", "cod": "SAL", "tipo": "Naturaleza", "lat": 8.24, "lng": -80.55},
+    28: {"nombre": "Mariposario", "cod": "MAR", "tipo": "Naturaleza", "lat": 8.40, "lng": -80.26},
+    29: {"nombre": "Canopy Adventure", "cod": "CAN", "tipo": "Aventura", "lat": 8.40, "lng": -80.26},
 }
+
+# ===== FUNCIÓN PARA AJUSTAR COORDENADAS A LA CARRETERA MÁS CERCANA =====
+def ajustar_coordenada_osrm(lat, lng):
+    """
+    Usa OSRM para encontrar la carretera más cercana a una coordenada
+    Retorna las coordenadas ajustadas (sobre la carretera)
+    """
+    url = f"http://router.project-osrm.org/route/v1/driving/{lng},{lat};{lng+0.001},{lat+0.001}"
+    params = {
+        "overview": "false",
+        "radiuses": "2000"  # Buscar en 2km
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        
+        if response.status_code == 200 and data.get('code') == 'Ok':
+            # OSRM encontró una ruta, extraer el punto de inicio ajustado
+            waypoints = data.get('waypoints', [])
+            if waypoints and len(waypoints) > 0:
+                location = waypoints[0].get('location', [])
+                if location and len(location) >= 2:
+                    # OSRM devuelve [lng, lat]
+                    return {
+                        'lat': location[1],
+                        'lng': location[0],
+                        'ajustado': True
+                    }
+    except Exception as e:
+        print(f"❌ Error ajustando coordenada: {e}")
+    
+    # Si falla, devolver las coordenadas originales
+    return {
+        'lat': lat,
+        'lng': lng,
+        'ajustado': False
+    }
 
 # ===== FUNCIÓN PARA CALCULAR RUTA CON OSRM =====
 def calcular_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
     """
-    Calcula la ruta usando OSRM con radiuses personalizado
+    Calcula la ruta usando OSRM con ajuste automático de coordenadas
     """
     
-    # ===== PARÁMETROS CONFIGURABLES =====
-    RADIO_BUSQUEDA = "1000"  # Buscar en 1 kilómetro alrededor del punto
-    # Opciones: "200", "500", "1000", "2000", "5000"
+    # ===== PRIMERO: AJUSTAR COORDENADAS =====
+    origen_ajustado = ajustar_coordenada_osrm(origen_lat, origen_lng)
+    destino_ajustado = ajustar_coordenada_osrm(destino_lat, destino_lng)
     
-    # OSRM usa formato: longitud,latitud (¡primero longitud!)
-    url = f"http://router.project-osrm.org/route/v1/driving/{origen_lng},{origen_lat};{destino_lng},{destino_lat}"
+    if origen_ajustado['ajustado']:
+        print(f"📍 Origen ajustado: {origen_ajustado['lat']}, {origen_ajustado['lng']}")
+    else:
+        print(f"⚠️ No se pudo ajustar origen, usando coordenada original")
+    
+    if destino_ajustado['ajustado']:
+        print(f"📍 Destino ajustado: {destino_ajustado['lat']}, {destino_ajustado['lng']}")
+    else:
+        print(f"⚠️ No se pudo ajustar destino, usando coordenada original")
+    
+    # ===== SEGUNDO: CALCULAR RUTA CON COORDENADAS AJUSTADAS =====
+    url = f"http://router.project-osrm.org/route/v1/driving/{origen_ajustado['lng']},{origen_ajustado['lat']};{destino_ajustado['lng']},{destino_ajustado['lat']}"
     
     params = {
-        "overview": "full",           # Obtener geometría completa
-        "geometries": "geojson",      # Formato GeoJSON
-        "steps": "true",              # Obtener instrucciones
-        "alternatives": "false",      # Solo una ruta
-        "radiuses": RADIO_BUSQUEDA    # 🔥 AQUÍ ESTÁ EL RADIUS
+        "overview": "full",
+        "geometries": "geojson",
+        "steps": "true",
+        "alternatives": "false",
+        "radiuses": "500"  # Radio más pequeño porque ya ajustamos
     }
     
     print(f"🔍 Calculando ruta OSRM...")
-    print(f"📍 Origen: {origen_lat}, {origen_lng}")
-    print(f"📍 Destino: {destino_lat}, {destino_lng}")
-    print(f"📏 Radio de búsqueda: {RADIO_BUSQUEDA} metros")
+    print(f"📍 Origen: {origen_ajustado['lat']}, {origen_ajustado['lng']}")
+    print(f"📍 Destino: {destino_ajustado['lat']}, {destino_ajustado['lng']}")
     
     try:
         response = requests.get(url, params=params, timeout=30)
@@ -175,12 +222,17 @@ def api_dias():
 
 @app.route('/api/test')
 def test_api():
-    """Endpoint de prueba para verificar que OSRM funciona"""
+    """Endpoint de prueba para verificar el ajuste de coordenadas"""
     resultado = calcular_ruta_osrm(8.5180, -80.3480, 8.3980, -80.2580)
+    return jsonify(resultado)
+
+@app.route('/api/ajustar/<float:lat>/<float:lng>')
+def ajustar_coordenada(lat, lng):
+    """Endpoint para probar el ajuste de una coordenada"""
+    resultado = ajustar_coordenada_osrm(lat, lng)
     return jsonify(resultado)
 
 if __name__ == '__main__':
     print("🚀 Iniciando servidor...")
-    print("📍 Usando OSRM (gratis, sin API Key)")
-    print("📏 Radio de búsqueda configurable")
+    print("📍 Usando OSRM con ajuste automático de coordenadas")
     app.run(debug=True)
