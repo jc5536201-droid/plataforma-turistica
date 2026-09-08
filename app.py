@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import requests
-import heapq
 import json
+import time
 
 app = Flask(__name__)
 
@@ -45,17 +45,17 @@ ATRACTIVOS = {
 def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
     """
     Calcula la ruta usando OpenRouteService API
-    Retorna: distancia, tiempo, puntos de la ruta
     """
     
     url = "https://api.openrouteservice.org/v2/directions/driving-car"
     
-    # OpenRouteService usa formato [longitud, latitud] (¡primero longitud!)
+    # OpenRouteService usa formato [longitud, latitud]
     coordenadas = [[origen_lng, origen_lat], [destino_lng, destino_lat]]
     
     headers = {
         "Authorization": ORS_API_KEY,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     }
     
     data = {
@@ -68,22 +68,30 @@ def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
     
     try:
         print(f"🔍 Calculando ruta: {origen_lat},{origen_lng} → {destino_lat},{destino_lng}")
-        response = requests.post(url, json=data, headers=headers, timeout=10)
-        resultado = response.json()
+        
+        response = requests.post(
+            url, 
+            json=data, 
+            headers=headers, 
+            timeout=30  # Aumentar timeout para Render
+        )
+        
+        print(f"📡 Respuesta código: {response.status_code}")
         
         if response.status_code == 200:
-            # Extraer datos de la ruta
+            resultado = response.json()
+            
+            # Extraer datos
             feature = resultado['features'][0]
             properties = feature['properties']
             segment = properties['segments'][0]
             
-            distancia_km = segment['distance'] / 1000  # Convertir metros a km
-            tiempo_min = segment['duration'] / 60      # Convertir segundos a minutos
-            costo = round(distancia_km * 0.15, 2)      # Costo estimado
+            distancia_km = segment['distance'] / 1000
+            tiempo_min = segment['duration'] / 60
+            costo = round(distancia_km * 0.15, 2)
             
-            # Extraer puntos de la geometría para dibujar en el mapa
+            # Extraer puntos de la ruta
             geometria = feature['geometry']['coordinates']
-            # Convertir de [lng, lat] a [lat, lng] para Leaflet
             puntos_ruta = [[coord[1], coord[0]] for coord in geometria]
             
             # Extraer instrucciones
@@ -101,37 +109,16 @@ def calcular_ruta_ors(origen_lat, origen_lng, destino_lat, destino_lng):
                 'exito': True
             }
         else:
-            print(f"❌ Error ORS ({response.status_code}): {resultado}")
-            return {'exito': False, 'error': resultado.get('error', 'Error desconocido')}
+            error_msg = f"Error {response.status_code}: {response.text[:200]}"
+            print(f"❌ {error_msg}")
+            return {'exito': False, 'error': error_msg}
             
     except requests.exceptions.Timeout:
         print("❌ Timeout al conectar con ORS")
         return {'exito': False, 'error': 'Timeout de conexión'}
     except Exception as e:
-        print(f"❌ Error al conectar con ORS: {e}")
+        print(f"❌ Error: {str(e)}")
         return {'exito': False, 'error': str(e)}
-
-# ===== FUNCIÓN PARA CALCULAR RUTA DIRECTA =====
-def calcular_ruta_directa(origen_id, destino_id):
-    """Calcula la ruta directamente entre dos puntos usando ORS"""
-    origen = ATRACTIVOS[origen_id]
-    destino = ATRACTIVOS[destino_id]
-    
-    resultado = calcular_ruta_ors(
-        origen['lat'], origen['lng'],
-        destino['lat'], destino['lng']
-    )
-    
-    if resultado['exito']:
-        return {
-            'distancia_km': resultado['distancia_km'],
-            'tiempo_min': resultado['tiempo_min'],
-            'costo': resultado['costo'],
-            'puntos_ruta': resultado['puntos_ruta'],
-            'instrucciones': resultado.get('instrucciones', []),
-            'exito': True
-        }
-    return resultado
 
 # ===== RUTAS DE LA PÁGINA WEB =====
 @app.route('/')
@@ -146,15 +133,20 @@ def api_ruta():
     
     print(f"📡 Solicitando ruta: {origen} → {destino}")
     
-    # Calcular ruta directamente con ORS
-    resultado = calcular_ruta_directa(origen, destino)
+    origen_data = ATRACTIVOS[origen]
+    destino_data = ATRACTIVOS[destino]
+    
+    resultado = calcular_ruta_ors(
+        origen_data['lat'], origen_data['lng'],
+        destino_data['lat'], destino_data['lng']
+    )
     
     if resultado['exito']:
         return jsonify({
             'origen': origen,
             'destino': destino,
-            'nodo_origen': ATRACTIVOS[origen],
-            'nodo_destino': ATRACTIVOS[destino],
+            'nodo_origen': origen_data,
+            'nodo_destino': destino_data,
             'distancia_km': resultado['distancia_km'],
             'tiempo_min': resultado['tiempo_min'],
             'costo': resultado['costo'],
@@ -166,7 +158,7 @@ def api_ruta():
         return jsonify({
             'exito': False,
             'error': resultado.get('error', 'Error al calcular la ruta')
-        }), 404
+        }), 500
 
 @app.route('/api/dias')
 def api_dias():
@@ -183,5 +175,4 @@ def api_dias():
 
 if __name__ == '__main__':
     print("🚀 Iniciando servidor...")
-    print("📍 API Key configurada:", ORS_API_KEY[:20] + "...")
     app.run(debug=True)
