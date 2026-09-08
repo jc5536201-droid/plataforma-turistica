@@ -33,8 +33,8 @@ ATRACTIVOS = {
         "nombre": "Playa Farallón",
         "cod": "PFA",
         "tipo": "Playa",
-        "lat": 8.3565826416,
-        "lng": -80.1372299194
+        "lat": 8.35658264,
+        "lng": -80.13722992
     },
 
     3: {
@@ -105,9 +105,9 @@ ATRACTIVOS = {
         "nombre": "Museo Regional Stella Sierra",
         "cod": "MSS",
         "tipo": "Cultural/Hist.",
-        "lat": 8.243600477843884,
-        "lng":-80.54045283080579
-    }, 
+        "lat": 8.24126389,
+        "lng": -80.54030556
+    },
 
     12: {
         "nombre": "Iglesia San Juan Bautista",
@@ -145,9 +145,9 @@ ATRACTIVOS = {
         "nombre": "Aguadulce",
         "cod": "AGU",
         "tipo": "Hub/Ciudad",
-        "lat": 8.230858614451835,
-        "lng": -80.55570602167948
-    }, 
+        "lat": 8.2421,
+        "lng": -80.5391
+    },
 
     17: {
         "nombre": "Antón",
@@ -225,8 +225,8 @@ ATRACTIVOS = {
         "nombre": "Ecoparque Don Arcelio",
         "cod": "ECO",
         "tipo": "Naturaleza",
-        "lat": 8.3833966057575,
-        "lng": -80.52890658192717
+        "lat": 8.38339661,
+        "lng": -80.52890658
     },
 
     27: {
@@ -249,8 +249,8 @@ ATRACTIVOS = {
         "nombre": "Canopy Adventure",
         "cod": "CAN",
         "tipo": "Aventura",
-        "lat": 8.638094921683837,
-        "lng": -80.13820276604051
+        "lat": 8.62598002,
+        "lng": -80.1388213
     }
 }
 
@@ -1145,23 +1145,25 @@ def api_coordenadas():
             "tipo":
             datos["tipo"],
 
+            # Coordenadas oficiales del atractivo (las tomadas de Google Maps).
+            # Las coordenadas ajustadas a carretera se mantienen separadas para OSRM.
             "lat":
-            datos["lat"],
+            datos.get("lat_original", datos["lat"]),
 
             "lng":
-            datos["lng"],
+            datos.get("lng_original", datos["lng"]),
 
             "lat_original":
-            datos.get(
-                "lat_original",
-                datos["lat"]
-            ),
+            datos.get("lat_original", datos["lat"]),
 
             "lng_original":
-            datos.get(
-                "lng_original",
-                datos["lng"]
-            )
+            datos.get("lng_original", datos["lng"]),
+
+            "lat_carretera":
+            datos["lat"],
+
+            "lng_carretera":
+            datos["lng"]
         }
 
     return jsonify(resultado)
