@@ -249,8 +249,8 @@ ATRACTIVOS = {
         "nombre": "Canopy Adventure",
         "cod": "CAN",
         "tipo": "Aventura",
-        "lat": 8.625980019659764,
-        "lng": -80.13882130000002
+        "lat": 8.6078,
+        "lng": -80.1367
     }
 }
 
