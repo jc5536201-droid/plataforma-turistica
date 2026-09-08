@@ -4,37 +4,46 @@ import json
 
 app = Flask(__name__)
 
-# ===== COORDENADAS CORREGIDAS (UBICACIÓN REAL EN GOOGLE MAPS) =====
+# ===== COORDENADAS VERIFICADAS (investigadas y corregidas) =====
+# Fuentes: Wikipedia (ES/EN), OpenStreetMap/Mapcarta, Geodatos.net, sitios oficiales
+# de municipios (municipios.gob.pa), Mindat.org y páginas turísticas verificadas.
+#
+# NOTA IMPORTANTE: los sitios marcados con (*) en el comentario no tienen una
+# fuente georreferenciada de alta precisión (son atractivos pequeños/poco
+# documentados en línea): se ubicaron lo más cerca posible del poblado o zona
+# donde realmente se encuentran, según fuentes textuales. Te recomiendo
+# verificarlos en Google Maps antes de usarlos en la tesis si necesitas
+# precisión de nivel "punto exacto del sendero/entrada".
 ATRACTIVOS = {
-    1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa", "lat": 8.3976, "lng": -80.1148},
-    2: {"nombre": "Playa Farallón", "cod": "PFA", "tipo": "Playa", "lat": 8.3782, "lng": -80.1275},
-    3: {"nombre": "Playa El Salado", "cod": "PES", "tipo": "Playa", "lat": 8.1990, "lng": -80.5460},
-    4: {"nombre": "Playa Blanca", "cod": "PBL", "tipo": "Playa", "lat": 8.3480, "lng": -80.0875},
-    5: {"nombre": "Playa Juan Hombrón", "cod": "PJH", "tipo": "Playa", "lat": 8.2985, "lng": -80.0670},
-    6: {"nombre": "Mercado Artesanía Valle Antón", "cod": "MAV", "tipo": "Cultural", "lat": 8.6185, "lng": -80.1270},
-    7: {"nombre": "Serpentario Maravillas Tropicales", "cod": "SMT", "tipo": "Naturaleza", "lat": 8.6280, "lng": -80.1370},
-    8: {"nombre": "Museo Hermanos Arias Madrid", "cod": "MHA", "tipo": "Cultural/Hist.", "lat": 8.5185, "lng": -80.3575},
-    9: {"nombre": "P.N. Omar Torrijos", "cod": "PNT", "tipo": "Parque Nacional", "lat": 8.5480, "lng": -80.5870},
-    10: {"nombre": "Sitio Arqueológico El Caño", "cod": "SAC", "tipo": "Arqueológico", "lat": 8.3985, "lng": -80.5170},
-    11: {"nombre": "Museo Regional Stella Sierra", "cod": "MSS", "tipo": "Cultural/Hist.", "lat": 8.2485, "lng": -80.5470},
-    12: {"nombre": "Iglesia San Juan Bautista", "cod": "ISJ", "tipo": "Histórico", "lat": 8.5180, "lng": -80.3570},
-    13: {"nombre": "El Chorro Las Yayas", "cod": "CLY", "tipo": "Cascada", "lat": 8.5485, "lng": -80.6770},
-    14: {"nombre": "Balneario Las Mendozas", "cod": "BLM", "tipo": "Balneario", "lat": 8.5180, "lng": -80.3270},
-    15: {"nombre": "Penonomé", "cod": "PEN", "tipo": "Hub/Ciudad", "lat": 8.5185, "lng": -80.3475},
-    16: {"nombre": "Aguadulce", "cod": "AGU", "tipo": "Hub/Ciudad", "lat": 8.2385, "lng": -80.5470},
-    17: {"nombre": "Antón", "cod": "ANT", "tipo": "Hub/Ciudad", "lat": 8.3985, "lng": -80.2575},
-    18: {"nombre": "La Pintada", "cod": "LAP", "tipo": "Hub/Ciudad", "lat": 8.5985, "lng": -80.4370},
-    19: {"nombre": "Natá", "cod": "NAT", "tipo": "Hub/Ciudad", "lat": 8.3285, "lng": -80.5170},
-    20: {"nombre": "Parroquia Ntra. Sra. Candelaria", "cod": "PNC", "tipo": "Histórico", "lat": 8.5980, "lng": -80.4370},
-    21: {"nombre": "Cerro Gaital", "cod": "CGA", "tipo": "Montaña", "lat": 8.6185, "lng": -80.1170},
-    22: {"nombre": "Museo de Penonomé", "cod": "MPE", "tipo": "Cultural", "lat": 8.5180, "lng": -80.3470},
-    23: {"nombre": "Mercado Artesanías La Pintada", "cod": "MLA", "tipo": "Cultural", "lat": 8.5985, "lng": -80.4375},
-    24: {"nombre": "Balneario Los Algarrobos", "cod": "BAL", "tipo": "Naturaleza", "lat": 8.5980, "lng": -80.4370},
-    25: {"nombre": "Iglesia Santiago Apóstol", "cod": "ISA", "tipo": "Histórico", "lat": 8.3280, "lng": -80.5175},
-    26: {"nombre": "Ecoparque Don Arcelio", "cod": "ECO", "tipo": "Naturaleza", "lat": 8.3285, "lng": -80.5170},
-    27: {"nombre": "Salinas de Aguadulce", "cod": "SAL", "tipo": "Naturaleza", "lat": 8.2380, "lng": -80.5475},
-    28: {"nombre": "Mariposario", "cod": "MAR", "tipo": "Naturaleza", "lat": 8.3980, "lng": -80.2570},
-    29: {"nombre": "Canopy Adventure", "cod": "CAN", "tipo": "Aventura", "lat": 8.3985, "lng": -80.2570},
+    1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa", "lat": 8.3825, "lng": -80.1086},
+    2: {"nombre": "Playa Farallón", "cod": "PFA", "tipo": "Playa", "lat": 8.3610, "lng": -80.1302},
+    3: {"nombre": "Playa El Salado", "cod": "PES", "tipo": "Playa", "lat": 8.1930, "lng": -80.4832},
+    4: {"nombre": "Playa Blanca", "cod": "PBL", "tipo": "Playa", "lat": 8.3500, "lng": -80.1450},
+    5: {"nombre": "Playa Juan Hombrón", "cod": "PJH", "tipo": "Playa", "lat": 8.2983, "lng": -80.2534},
+    6: {"nombre": "Mercado Artesanía Valle Antón", "cod": "MAV", "tipo": "Cultural", "lat": 8.6008, "lng": -80.1295},
+    7: {"nombre": "Serpentario Maravillas Tropicales", "cod": "SMT", "tipo": "Naturaleza", "lat": 8.5995, "lng": -80.1275},  # (*)
+    8: {"nombre": "Museo Hermanos Arias Madrid", "cod": "MHA", "tipo": "Cultural/Hist.", "lat": 8.5350, "lng": -80.3600},  # (*) vía a Las Mendozas
+    9: {"nombre": "P.N. Omar Torrijos", "cod": "PNT", "tipo": "Parque Nacional", "lat": 8.6878, "lng": -80.6433},
+    10: {"nombre": "Sitio Arqueológico El Caño", "cod": "SAC", "tipo": "Arqueológico", "lat": 8.3960, "lng": -80.5013},
+    11: {"nombre": "Museo Regional Stella Sierra", "cod": "MSS", "tipo": "Cultural/Hist.", "lat": 8.2400, "lng": -80.5460},  # (*) casco de Aguadulce
+    12: {"nombre": "Iglesia San Juan Bautista", "cod": "ISJ", "tipo": "Histórico", "lat": 8.5220, "lng": -80.3594},
+    13: {"nombre": "El Chorro Las Yayas", "cod": "CLY", "tipo": "Cascada", "lat": 8.6100, "lng": -80.4550},  # (*) distrito La Pintada
+    14: {"nombre": "Balneario Las Mendozas", "cod": "BLM", "tipo": "Balneario", "lat": 8.5450, "lng": -80.3700},  # (*) río Zaratí, cerca de Penonomé
+    15: {"nombre": "Penonomé", "cod": "PEN", "tipo": "Hub/Ciudad", "lat": 8.5187, "lng": -80.3553},
+    16: {"nombre": "Aguadulce", "cod": "AGU", "tipo": "Hub/Ciudad", "lat": 8.2400, "lng": -80.5400},
+    17: {"nombre": "Antón", "cod": "ANT", "tipo": "Hub/Ciudad", "lat": 8.3985, "lng": -80.2609},
+    18: {"nombre": "La Pintada", "cod": "LAP", "tipo": "Hub/Ciudad", "lat": 8.6012, "lng": -80.4489},
+    19: {"nombre": "Natá", "cod": "NAT", "tipo": "Hub/Ciudad", "lat": 8.3300, "lng": -80.5200},
+    20: {"nombre": "Parroquia Ntra. Sra. Candelaria", "cod": "PNC", "tipo": "Histórico", "lat": 8.5600, "lng": -80.4700},  # (*) La Candelaria, km167 Interamericana
+    21: {"nombre": "Cerro Gaital", "cod": "CGA", "tipo": "Montaña", "lat": 8.6250, "lng": -80.1280},  # (*) mirador norte de El Valle
+    22: {"nombre": "Museo de Penonomé", "cod": "MPE", "tipo": "Cultural", "lat": 8.5190, "lng": -80.3570},  # Casco Antiguo, Barrio San Antonio
+    23: {"nombre": "Mercado Artesanías La Pintada", "cod": "MLA", "tipo": "Cultural", "lat": 8.6012, "lng": -80.4489},
+    24: {"nombre": "Balneario Los Algarrobos", "cod": "BAL", "tipo": "Naturaleza", "lat": 8.6050, "lng": -80.4500},  # (*) río Coclé del Sur, La Pintada
+    25: {"nombre": "Iglesia Santiago Apóstol", "cod": "ISA", "tipo": "Histórico", "lat": 8.3305, "lng": -80.5195},
+    26: {"nombre": "Ecoparque Don Arcelio", "cod": "ECO", "tipo": "Naturaleza", "lat": 8.3700, "lng": -80.5200},  # (*) cerca de Natá
+    27: {"nombre": "Salinas de Aguadulce", "cod": "SAL", "tipo": "Naturaleza", "lat": 8.2000, "lng": -80.5600},  # (*) salineras costeras al sur de Aguadulce
+    28: {"nombre": "Mariposario", "cod": "MAR", "tipo": "Naturaleza", "lat": 8.4000, "lng": -80.2600},  # (*) Antón
+    29: {"nombre": "Canopy Adventure", "cod": "CAN", "tipo": "Aventura", "lat": 8.6000, "lng": -80.1280},  # corregido: está en El Valle de Antón, no en Antón ciudad
 }
 
 # ===== FUNCIÓN PARA CALCULAR RUTA CON OSRM =====
