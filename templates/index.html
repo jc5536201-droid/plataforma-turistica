@@ -22,6 +22,14 @@
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
+    <!-- Leaflet.markercluster (agrupa pines muy cercanos entre sí) -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+
     <!-- Font Awesome -->
     <link
         rel="stylesheet"
@@ -1077,6 +1085,13 @@
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
 </script>
 
+<!-- Leaflet.markercluster: agrupa pines muy cercanos entre sí
+     (Penonomé, La Pintada, Valle de Antón tienen varios atractivos
+     casi encimados que sin esto se dibujan uno sobre otro) -->
+<script
+    src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js">
+</script>
+
 
 <script>
 
@@ -1106,6 +1121,10 @@ let rutaActual = [];
 
 
 let ultimaRuta = null;
+
+
+// Grupo de clustering para los marcadores base (no los de la ruta)
+let clusterGroup = null;
 
 
 // ============================================================
@@ -1188,6 +1207,47 @@ function agregarMarcadores() {
     };
 
 
+    // maxClusterRadius bajo: solo agrupa lo que está MUY cerca
+    // (a un mismo zoom de ciudad), así los pines que sí están
+    // separados no se agrupan innecesariamente.
+    clusterGroup = L.markerClusterGroup({
+
+        spiderfyOnMaxZoom: true,
+
+        showCoverageOnHover: false,
+
+        maxClusterRadius: 35,
+
+        iconCreateFunction: function (cluster) {
+
+            return L.divIcon({
+
+                html: `<div style="
+                    background:#1D9E75;
+                    width:38px;
+                    height:38px;
+                    border-radius:50%;
+                    border:3px solid white;
+                    box-shadow:0 2px 10px rgba(0,0,0,0.35);
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    color:white;
+                    font-weight:700;
+                    font-size:0.9rem;
+                ">${cluster.getChildCount()}</div>`,
+
+                className: '',
+
+                iconSize: [38, 38]
+
+            });
+
+        }
+
+    });
+
+
     for (
         const [id, data]
         of Object.entries(ATRACTIVOS)
@@ -1245,8 +1305,7 @@ function agregarMarcadores() {
 
                 }
 
-            )
-            .addTo(mapa);
+            );
 
 
         marker.bindPopup(`
@@ -1290,7 +1349,17 @@ function agregarMarcadores() {
             }
         );
 
+
+        clusterGroup.addLayer(
+            marker
+        );
+
     }
+
+
+    mapa.addLayer(
+        clusterGroup
+    );
 
 }
 
@@ -1717,13 +1786,19 @@ function dibujarRuta(
                 });
 
 
+            // CORRECCIÓN: el backend envía "lat_ruta"/"lng_ruta"
+            // (coordenadas ajustadas a la red vial), no
+            // "lat_carretera"/"lng_carretera". Antes el nombre no
+            // coincidía y el pin caía siempre en la coordenada
+            // original, aunque la polilínea (ruta real de OSRM)
+            // terminara en un punto distinto sobre la carretera.
             const lat =
-                nodo.lat_carretera
+                nodo.lat_ruta
                 ?? nodo.lat;
 
 
             const lng =
-                nodo.lng_carretera
+                nodo.lng_ruta
                 ?? nodo.lng;
 
 
