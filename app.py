@@ -100,8 +100,8 @@ ATRACTIVOS = {
         "nombre": "Sitio Arqueológico El Caño",
         "cod": "SAC",
         "tipo": "Arqueológico",
-        "lat": 8.404523441369742,
-        "lng": -80.50255456863812,
+        "lat": 8.396862, 
+        "lng": -80.501482,
         "descripcion": "Importante sitio arqueológico precolombino"
     },
 
