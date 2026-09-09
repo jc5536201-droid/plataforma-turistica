@@ -17,43 +17,255 @@ TIMEOUT = 30
 MAX_RETRIES = 3
 
 # ============================================================
-# ATRACTIVOS TURÍSTICOS
+# ATRACTIVOS TURÍSTICOS - COORDENADAS CORREGIDAS
 # ============================================================
 
 ATRACTIVOS = {
-    1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa", "lat": 8.37518, "lng": -80.10355},
-    2: {"nombre": "Playa Farallón", "cod": "PFA", "tipo": "Playa", "lat": 8.35658264, "lng": -80.13722992},
-    3: {"nombre": "Playa El Salado", "cod": "PES", "tipo": "Playa", "lat": 8.20197, "lng": -80.48368},
-    4: {"nombre": "Playa Blanca", "cod": "PBL", "tipo": "Playa", "lat": 8.34535, "lng": -80.15234},
-    5: {"nombre": "Playa Juan Hombrón", "cod": "PJH", "tipo": "Playa", "lat": 8.31682, "lng": -80.20536},
-    6: {"nombre": "Mercado Artesanía Valle Antón", "cod": "MAV", "tipo": "Cultural", "lat": 8.60409, "lng": -80.13119},
-    7: {"nombre": "Serpentario Maravillas Tropicales", "cod": "SMT", "tipo": "Naturaleza", "lat": 8.601521, "lng": -80.115128},
-    8: {"nombre": "Museo Hermanos Arias Madrid", "cod": "MHA", "tipo": "Cultural/Hist.", "lat": 8.52508, "lng": -80.35666},
-    9: {"nombre": "P.N. Omar Torrijos", "cod": "PNT", "tipo": "Parque Nacional", "lat": 8.6505, "lng": -80.7125},
-    10: {"nombre": "Sitio Arqueológico El Caño", "cod": "SAC", "tipo": "Arqueológico", "lat": 8.39542, "lng": -80.50132},
-    11: {"nombre": "Museo Regional Stella Sierra", "cod": "MSS", "tipo": "Cultural/Hist.", "lat": 8.24126389, "lng": -80.54030556},
-    12: {"nombre": "Iglesia San Juan Bautista", "cod": "ISJ", "tipo": "Histórico", "lat": 8.52198, "lng": -80.35941},
-    13: {"nombre": "El Chorro Las Yayas", "cod": "CLY", "tipo": "Cascada", "lat": 8.63911, "lng": -80.58982},
-    14: {"nombre": "Balneario Las Mendozas", "cod": "BLM", "tipo": "Balneario", "lat": 8.52645, "lng": -80.35547},
-    15: {"nombre": "Penonomé", "cod": "PEN", "tipo": "Hub/Ciudad", "lat": 8.5205, "lng": -80.35958},
-    16: {"nombre": "Aguadulce", "cod": "AGU", "tipo": "Hub/Ciudad", "lat": 8.2421, "lng": -80.5391},
-    17: {"nombre": "Antón", "cod": "ANT", "tipo": "Hub/Ciudad", "lat": 8.39448, "lng": -80.26635},
-    18: {"nombre": "La Pintada", "cod": "LAP", "tipo": "Hub/Ciudad", "lat": 8.59597, "lng": -80.44647},
-    19: {"nombre": "Natá", "cod": "NAT", "tipo": "Hub/Ciudad", "lat": 8.33695, "lng": -80.51771},
-    20: {"nombre": "Parroquia Ntra. Sra. Candelaria", "cod": "PNC", "tipo": "Histórico", "lat": 8.59597, "lng": -80.44647},
-    21: {"nombre": "Cerro Gaital", "cod": "CGA", "tipo": "Montaña", "lat": 8.6256, "lng": -80.13198},
-    22: {"nombre": "Museo de Penonomé", "cod": "MPE", "tipo": "Cultural", "lat": 8.51956, "lng": -80.36061},
-    23: {"nombre": "Mercado Artesanías La Pintada", "cod": "MLA", "tipo": "Cultural", "lat": 8.5875, "lng": -80.4425},
-    24: {"nombre": "Balneario Los Algarrobos", "cod": "BAL", "tipo": "Naturaleza", "lat": 8.5925, "lng": -80.445},
-    25: {"nombre": "Iglesia Santiago Apóstol", "cod": "ISA", "tipo": "Histórico", "lat": 8.33189, "lng": -80.51548},
-    26: {"nombre": "Ecoparque Don Arcelio", "cod": "ECO", "tipo": "Naturaleza", "lat": 8.38339661, "lng": -80.52890658},
-    27: {"nombre": "Salinas de Aguadulce", "cod": "SAL", "tipo": "Naturaleza", "lat": 8.25983, "lng": -80.49883},
-    28: {"nombre": "Mariposario", "cod": "MAR", "tipo": "Naturaleza", "lat": 8.601134, "lng": -80.129326},
-    29: {"nombre": "Canopy Adventure", "cod": "CAN", "tipo": "Aventura", "lat": 8.62598002, "lng": -80.1388213}
+    # ========== PLAYAS (Costa del Pacífico) ==========
+    1: {
+        "nombre": "Playa Santa Clara",
+        "cod": "PSC",
+        "tipo": "Playa",
+        "lat": 8.37518,
+        "lng": -80.10355,
+        "descripcion": "Playa de arena blanca y aguas tranquilas"
+    },
+    2: {
+        "nombre": "Playa Farallón",
+        "cod": "PFA",
+        "tipo": "Playa",
+        "lat": 8.35658,
+        "lng": -80.13723,
+        "descripcion": "Playa con olas moderadas y arena dorada"
+    },
+    3: {
+        "nombre": "Playa El Salado",
+        "cod": "PES",
+        "tipo": "Playa",
+        "lat": 8.20197,
+        "lng": -80.48368,
+        "descripcion": "Playa tranquila cerca de Aguadulce"
+    },
+    4: {
+        "nombre": "Playa Blanca",
+        "cod": "PBL",
+        "tipo": "Playa",
+        "lat": 8.34535,
+        "lng": -80.15234,
+        "descripcion": "Hermosa playa de arena blanca"
+    },
+    5: {
+        "nombre": "Playa Juan Hombrón",
+        "cod": "PJH",
+        "tipo": "Playa",
+        "lat": 8.31682,
+        "lng": -80.20536,
+        "descripcion": "Playa con aguas cristalinas"
+    },
+
+    # ========== CULTURA Y ARTE ==========
+    6: {
+        "nombre": "Mercado Artesanía Valle Antón",
+        "cod": "MAV",
+        "tipo": "Cultural",
+        "lat": 8.60409,
+        "lng": -80.13119,
+        "descripcion": "Mercado de artesanías típicas"
+    },
+    7: {
+        "nombre": "Serpentario Maravillas Tropicales",
+        "cod": "SMT",
+        "tipo": "Naturaleza",
+        "lat": 8.60152,
+        "lng": -80.11513,
+        "descripcion": "Exhibición de serpientes y reptiles"
+    },
+    8: {
+        "nombre": "Museo Hermanos Arias Madrid",
+        "cod": "MHA",
+        "tipo": "Cultural/Hist.",
+        "lat": 8.52508,
+        "lng": -80.35666,
+        "descripcion": "Museo histórico en Penonomé"
+    },
+    9: {
+        "nombre": "P.N. Omar Torrijos",
+        "cod": "PNT",
+        "tipo": "Parque Nacional",
+        "lat": 8.6505,
+        "lng": -80.7125,
+        "descripcion": "Parque Nacional con senderos ecológicos"
+    },
+    10: {
+        "nombre": "Sitio Arqueológico El Caño",
+        "cod": "SAC",
+        "tipo": "Arqueológico",
+        "lat": 8.39542,
+        "lng": -80.50132,
+        "descripcion": "Importante sitio arqueológico precolombino"
+    },
+
+    # ========== MUSEOS Y SITIOS HISTÓRICOS (CORREGIDOS) ==========
+    11: {
+        "nombre": "Museo Regional Stella Sierra",
+        "cod": "MSS",
+        "tipo": "Cultural/Hist.",
+        "lat": 8.24126,  # CORREGIDO - Está en Aguadulce
+        "lng": -80.54031,
+        "descripcion": "Museo regional en Aguadulce"
+    },
+    12: {
+        "nombre": "Iglesia San Juan Bautista",
+        "cod": "ISJ",
+        "tipo": "Histórico",
+        "lat": 8.52198,
+        "lng": -80.35941,
+        "descripcion": "Iglesia histórica en Penonomé"
+    },
+    13: {
+        "nombre": "El Chorro Las Yayas",
+        "cod": "CLY",
+        "tipo": "Cascada",
+        "lat": 8.63911,
+        "lng": -80.58982,
+        "descripcion": "Hermosa cascada en La Pintada"
+    },
+    14: {
+        "nombre": "Balneario Las Mendozas",
+        "cod": "BLM",
+        "tipo": "Balneario",
+        "lat": 8.52645,
+        "lng": -80.35547,
+        "descripcion": "Balneario natural cerca de Penonomé"
+    },
+
+    # ========== CIUDADES Y PUEBLOS (CORREGIDOS) ==========
+    15: {
+        "nombre": "Penonomé",
+        "cod": "PEN",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.5205,
+        "lng": -80.35958,
+        "descripcion": "Capital de la provincia de Coclé"
+    },
+    16: {
+        "nombre": "Aguadulce",
+        "cod": "AGU",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.24210,  # CORREGIDO - Ubicación correcta de Aguadulce
+        "lng": -80.53910,
+        "descripcion": "Ciudad conocida por sus salinas"
+    },
+    17: {
+        "nombre": "Antón",
+        "cod": "ANT",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.39448,
+        "lng": -80.26635,
+        "descripcion": "Ciudad cerca de las playas"
+    },
+    18: {
+        "nombre": "La Pintada",
+        "cod": "LAP",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.59597,  # CORREGIDO
+        "lng": -80.44647,
+        "descripcion": "Ciudad conocida por sus artesanías"
+    },
+    19: {
+        "nombre": "Natá",
+        "cod": "NAT",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.33695,  # CORREGIDO
+        "lng": -80.51771,
+        "descripcion": "Ciudad histórica con iglesia colonial"
+    },
+
+    # ========== SITIOS RELIGIOSOS Y CULTURALES (CORREGIDOS) ==========
+    20: {
+        "nombre": "Parroquia Ntra. Sra. Candelaria",
+        "cod": "PNC",
+        "tipo": "Histórico",
+        "lat": 8.59600,  # CORREGIDO - Está en La Pintada
+        "lng": -80.44700,
+        "descripcion": "Iglesia histórica en La Pintada"
+    },
+    21: {
+        "nombre": "Cerro Gaital",
+        "cod": "CGA",
+        "tipo": "Montaña",
+        "lat": 8.6256,
+        "lng": -80.13198,
+        "descripcion": "Cerro con vista panorámica"
+    },
+    22: {
+        "nombre": "Museo de Penonomé",
+        "cod": "MPE",
+        "tipo": "Cultural",
+        "lat": 8.51956,
+        "lng": -80.36061,
+        "descripcion": "Museo histórico en Penonomé"
+    },
+    23: {
+        "nombre": "Mercado Artesanías La Pintada",
+        "cod": "MLA",
+        "tipo": "Cultural",
+        "lat": 8.58750,  # CORREGIDO
+        "lng": -80.44250,
+        "descripcion": "Mercado de artesanías en La Pintada"
+    },
+    24: {
+        "nombre": "Balneario Los Algarrobos",
+        "cod": "BAL",
+        "tipo": "Naturaleza",
+        "lat": 8.59250,  # CORREGIDO
+        "lng": -80.44500,
+        "descripcion": "Balneario natural cerca de La Pintada"
+    },
+    25: {
+        "nombre": "Iglesia Santiago Apóstol",
+        "cod": "ISA",
+        "tipo": "Histórico",
+        "lat": 8.33189,
+        "lng": -80.51548,
+        "descripcion": "Iglesia colonial en Natá"
+    },
+    26: {
+        "nombre": "Ecoparque Don Arcelio",
+        "cod": "ECO",
+        "tipo": "Naturaleza",
+        "lat": 8.38340,
+        "lng": -80.52891,
+        "descripcion": "Parque ecológico cerca de Natá"
+    },
+    27: {
+        "nombre": "Salinas de Aguadulce",
+        "cod": "SAL",
+        "tipo": "Naturaleza",
+        "lat": 8.25983,  # CORREGIDO - Cerca de Aguadulce
+        "lng": -80.49883,
+        "descripcion": "Salinas tradicionales"
+    },
+    28: {
+        "nombre": "Mariposario",
+        "cod": "MAR",
+        "tipo": "Naturaleza",
+        "lat": 8.60113,
+        "lng": -80.12933,
+        "descripcion": "Jardín de mariposas"
+    },
+    29: {
+        "nombre": "Canopy Adventure",
+        "cod": "CAN",
+        "tipo": "Aventura",
+        "lat": 8.62598,
+        "lng": -80.13882,
+        "descripcion": "Tirolesa y aventura en la selva"
+    }
 }
 
 # ============================================================
-# DISTANCIA GEOGRÁFICA AUXILIAR
+# FUNCIONES AUXILIARES
 # ============================================================
 
 def distancia_haversine(lat1, lon1, lat2, lon2):
@@ -69,13 +281,8 @@ def distancia_haversine(lat1, lon1, lat2, lon2):
     
     return radio_tierra * c
 
-# ============================================================
-# OBTENER PUNTO MÁS CERCANO A UNA CARRETERA (CORREGIDO)
-# ============================================================
-
 def obtener_punto_carretera(lat, lng):
     """Obtiene el punto más cercano en la red vial."""
-    # OSRM espera lng,lat
     url = f"{OSRM_URL}/nearest/v1/driving/{lng},{lat}"
     params = {"number": 1}
     
@@ -86,10 +293,10 @@ def obtener_punto_carretera(lat, lng):
             
             if respuesta.status_code == 200 and data.get("code") == "Ok":
                 waypoint = data["waypoints"][0]
-                coordenadas = waypoint["location"]  # [lng, lat]
+                coordenadas = waypoint["location"]
                 return {
-                    "lng": coordenadas[0],  # lng
-                    "lat": coordenadas[1],  # lat
+                    "lng": coordenadas[0],
+                    "lat": coordenadas[1],
                     "exito": True
                 }
             time.sleep(1)
@@ -99,19 +306,13 @@ def obtener_punto_carretera(lat, lng):
     
     return {"exito": False, "error": "No se encontró carretera cercana"}
 
-# ============================================================
-# OBTENER RUTA ENTRE DOS PUNTOS (CORREGIDO)
-# ============================================================
-
 def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
     """Obtiene la ruta entre dos puntos usando OSRM."""
-    # OSRM espera lng,lat
     url = f"{OSRM_URL}/route/v1/driving/{origen_lng},{origen_lat};{destino_lng},{destino_lat}"
     params = {
         "overview": "full",
         "geometries": "geojson",
-        "steps": "true",
-        "annotations": "true"
+        "steps": "true"
     }
     
     for intento in range(MAX_RETRIES):
@@ -121,16 +322,11 @@ def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
             
             if respuesta.status_code == 200 and data.get("code") == "Ok":
                 ruta = data["routes"][0]
-                
-                # La distancia viene en metros
                 distancia_km = ruta["distance"] / 1000
-                # El tiempo viene en segundos
                 tiempo_min = ruta["duration"] / 60
                 costo = distancia_km * COSTO_POR_KM
                 
-                # OSRM devuelve coordenadas como [lng, lat]
                 geometria = ruta["geometry"]["coordinates"]
-                # Convertir a [lat, lng] para Leaflet
                 puntos_ruta = [[coord[1], coord[0]] for coord in geometria]
                 
                 instrucciones = []
@@ -147,9 +343,7 @@ def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
                     "costo": round(costo, 2),
                     "puntos_ruta": puntos_ruta,
                     "instrucciones": instrucciones,
-                    "exito": True,
-                    "distancia_metros": ruta["distance"],
-                    "tiempo_segundos": ruta["duration"]
+                    "exito": True
                 }
             
             time.sleep(1)
@@ -159,18 +353,12 @@ def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
     
     return {"exito": False, "error": "No se pudo calcular la ruta"}
 
-# ============================================================
-# CONSTRUIR MATRIZ DE DISTANCIAS Y TIEMPOS (CORREGIDO)
-# ============================================================
-
 def construir_matriz_osrm(puntos):
     """Construye la matriz de distancias y tiempos usando OSRM."""
     ids = list(puntos.keys())
     n = len(ids)
     
-    # Si hay pocos puntos, usar OSRM table
     if n <= 25:
-        # Construir cadena de coordenadas en formato lng,lat
         coordenadas = ";".join(
             f"{puntos[nodo]['lng']},{puntos[nodo]['lat']}"
             for nodo in ids
@@ -184,10 +372,9 @@ def construir_matriz_osrm(puntos):
             data = respuesta.json()
             
             if respuesta.status_code == 200 and data.get("code") == "Ok":
-                matriz_distancia = data["distances"]  # en metros
-                matriz_tiempo = data["durations"]    # en segundos
+                matriz_distancia = data["distances"]
+                matriz_tiempo = data["durations"]
                 
-                # Limpiar valores nulos
                 for i in range(n):
                     for j in range(n):
                         if i != j:
@@ -196,14 +383,13 @@ def construir_matriz_osrm(puntos):
                                     puntos[ids[i]]["lat"], puntos[ids[i]]["lng"],
                                     puntos[ids[j]]["lat"], puntos[ids[j]]["lng"]
                                 )
-                                matriz_distancia[i][j] = dist * 1000  # metros
-                                matriz_tiempo[i][j] = (dist / 40) * 3600  # segundos
+                                matriz_distancia[i][j] = dist * 1000
+                                matriz_tiempo[i][j] = (dist / 40) * 3600
                 
                 return ids, matriz_distancia, matriz_tiempo
         except Exception as e:
             print("Error en matriz OSRM:", e)
     
-    # Fallback: matriz aproximada
     return construir_matriz_aproximada(puntos)
 
 def construir_matriz_aproximada(puntos):
@@ -221,14 +407,10 @@ def construir_matriz_aproximada(puntos):
                     puntos[ids[i]]["lat"], puntos[ids[i]]["lng"],
                     puntos[ids[j]]["lat"], puntos[ids[j]]["lng"]
                 )
-                matriz_distancia[i][j] = dist * 1000  # metros
-                matriz_tiempo[i][j] = (dist / 40) * 3600  # segundos (40 km/h)
+                matriz_distancia[i][j] = dist * 1000
+                matriz_tiempo[i][j] = (dist / 40) * 3600
     
     return ids, matriz_distancia, matriz_tiempo
-
-# ============================================================
-# CONSTRUIR GRAFO (CORREGIDO)
-# ============================================================
 
 def construir_grafo(puntos):
     """Construye el grafo de rutas entre todos los puntos."""
@@ -257,74 +439,10 @@ def construir_grafo(puntos):
             grafo[nodo_origen][nodo_destino] = {
                 "distancia_km": round(distancia_km, 2),
                 "tiempo_min": round(tiempo_min, 2),
-                "costo": round(costo, 2),
-                "distancia_metros": distancia_metros,
-                "tiempo_segundos": tiempo_segundos
+                "costo": round(costo, 2)
             }
     
     return grafo
-
-# ============================================================
-# OBTENER GEOMETRÍA COMPLETA DEL CAMINO (CORREGIDO)
-# ============================================================
-
-def obtener_geometria_camino(camino):
-    """Obtiene la geometría completa del camino con todos los puntos intermedios."""
-    if not camino or len(camino) < 2:
-        return []
-    
-    # Construir puntos para la ruta
-    puntos = []
-    for nodo in camino:
-        if nodo in PUNTOS_AJUSTADOS:
-            puntos.append({
-                "lat": PUNTOS_AJUSTADOS[nodo]["lat"],
-                "lng": PUNTOS_AJUSTADOS[nodo]["lng"]
-            })
-        elif nodo in ATRACTIVOS:
-            puntos.append({
-                "lat": ATRACTIVOS[nodo]["lat"],
-                "lng": ATRACTIVOS[nodo]["lng"]
-            })
-    
-    if len(puntos) >= 2:
-        # Crear una ruta que pase por todos los puntos intermedios
-        coord_str = ";".join(f"{p['lng']},{p['lat']}" for p in puntos)
-        url = f"{OSRM_URL}/route/v1/driving/{coord_str}"
-        params = {
-            "overview": "full",
-            "geometries": "geojson",
-            "steps": "true"
-        }
-        
-        try:
-            respuesta = requests.get(url, params=params, timeout=60)
-            data = respuesta.json()
-            
-            if respuesta.status_code == 200 and data.get("code") == "Ok":
-                ruta = data["routes"][0]
-                # OSRM devuelve [lng, lat], convertimos a [lat, lng]
-                geometria = ruta["geometry"]["coordinates"]
-                return [[coord[1], coord[0]] for coord in geometria]
-        except Exception as e:
-            print("Error obteniendo geometría:", e)
-        
-        # Fallback: línea recta entre puntos
-        puntos_ruta = []
-        for i in range(len(puntos) - 1):
-            inicio = puntos[i]
-            fin = puntos[i + 1]
-            num_puntos = 20
-            for j in range(num_puntos):
-                t = j / num_puntos
-                lat = inicio["lat"] + (fin["lat"] - inicio["lat"]) * t
-                lng = inicio["lng"] + (fin["lng"] - inicio["lng"]) * t
-                puntos_ruta.append([lat, lng])
-            puntos_ruta.append([fin["lat"], fin["lng"]])
-        
-        return puntos_ruta
-    
-    return []
 
 # ============================================================
 # PREPARAR GRAFO
@@ -432,6 +550,56 @@ def dijkstra(grafo, origen, destino, criterio):
         "criterio": criterio
     }
 
+def obtener_geometria_camino(camino):
+    """Obtiene la geometría completa del camino con todos los puntos intermedios."""
+    if not camino or len(camino) < 2:
+        return []
+    
+    puntos = []
+    for nodo in camino:
+        if nodo in PUNTOS_AJUSTADOS:
+            puntos.append({
+                "lat": PUNTOS_AJUSTADOS[nodo]["lat"],
+                "lng": PUNTOS_AJUSTADOS[nodo]["lng"]
+            })
+        elif nodo in ATRACTIVOS:
+            puntos.append({
+                "lat": ATRACTIVOS[nodo]["lat"],
+                "lng": ATRACTIVOS[nodo]["lng"]
+            })
+    
+    if len(puntos) >= 2:
+        coord_str = ";".join(f"{p['lng']},{p['lat']}" for p in puntos)
+        url = f"{OSRM_URL}/route/v1/driving/{coord_str}"
+        params = {"overview": "full", "geometries": "geojson", "steps": "true"}
+        
+        try:
+            respuesta = requests.get(url, params=params, timeout=60)
+            data = respuesta.json()
+            
+            if respuesta.status_code == 200 and data.get("code") == "Ok":
+                ruta = data["routes"][0]
+                geometria = ruta["geometry"]["coordinates"]
+                return [[coord[1], coord[0]] for coord in geometria]
+        except Exception as e:
+            print("Error obteniendo geometría:", e)
+        
+        puntos_ruta = []
+        for i in range(len(puntos) - 1):
+            inicio = puntos[i]
+            fin = puntos[i + 1]
+            num_puntos = 20
+            for j in range(num_puntos):
+                t = j / num_puntos
+                lat = inicio["lat"] + (fin["lat"] - inicio["lat"]) * t
+                lng = inicio["lng"] + (fin["lng"] - inicio["lng"]) * t
+                puntos_ruta.append([lat, lng])
+            puntos_ruta.append([fin["lat"], fin["lng"]])
+        
+        return puntos_ruta
+    
+    return []
+
 # ============================================================
 # RUTAS DE LA API
 # ============================================================
@@ -525,70 +693,6 @@ def api_ruta():
         print("ERROR API RUTA:", e)
         return jsonify({"exito": False, "error": str(e)}), 500
 
-@app.route("/api/ruta-directa", methods=["POST"])
-def api_ruta_directa():
-    """API para obtener ruta directa entre dos puntos sin Dijkstra."""
-    try:
-        data = request.get_json()
-        origen = int(data["origen"])
-        destino = int(data["destino"])
-        
-        if origen not in ATRACTIVOS or destino not in ATRACTIVOS:
-            return jsonify({"exito": False, "error": "Nodo no válido"}), 400
-        
-        # Obtener coordenadas ajustadas o originales
-        if PUNTOS_AJUSTADOS:
-            o_lat = PUNTOS_AJUSTADOS[origen]["lat"]
-            o_lng = PUNTOS_AJUSTADOS[origen]["lng"]
-            d_lat = PUNTOS_AJUSTADOS[destino]["lat"]
-            d_lng = PUNTOS_AJUSTADOS[destino]["lng"]
-        else:
-            o_lat = ATRACTIVOS[origen]["lat"]
-            o_lng = ATRACTIVOS[origen]["lng"]
-            d_lat = ATRACTIVOS[destino]["lat"]
-            d_lng = ATRACTIVOS[destino]["lng"]
-        
-        # Calcular ruta directa con OSRM
-        ruta = obtener_ruta_osrm(o_lat, o_lng, d_lat, d_lng)
-        
-        if not ruta["exito"]:
-            # Fallback: Haversine
-            dist = distancia_haversine(o_lat, o_lng, d_lat, d_lng)
-            puntos = generar_puntos_intermedios(o_lat, o_lng, d_lat, d_lng)
-            return jsonify({
-                "exito": True,
-                "distancia_km": round(dist, 2),
-                "tiempo_min": round(dist / 40 * 60),
-                "costo": round(dist * COSTO_POR_KM, 2),
-                "puntos_ruta": puntos,
-                "origen": origen,
-                "destino": destino
-            })
-        
-        return jsonify({
-            "exito": True,
-            "distancia_km": ruta["distancia_km"],
-            "tiempo_min": ruta["tiempo_min"],
-            "costo": ruta["costo"],
-            "puntos_ruta": ruta["puntos_ruta"],
-            "origen": origen,
-            "destino": destino,
-            "instrucciones": ruta.get("instrucciones", [])
-        })
-        
-    except Exception as e:
-        return jsonify({"exito": False, "error": str(e)}), 500
-
-def generar_puntos_intermedios(lat1, lon1, lat2, lon2, num=30):
-    """Genera puntos intermedios entre dos coordenadas."""
-    puntos = []
-    for i in range(num + 1):
-        t = i / num
-        lat = lat1 + (lat2 - lat1) * t
-        lon = lon1 + (lon2 - lon1) * t
-        puntos.append([lat, lon])
-    return puntos
-
 @app.route("/api/coordenadas")
 def api_coordenadas():
     """API para obtener todas las coordenadas de los atractivos."""
@@ -617,24 +721,6 @@ def api_grafo():
     if not GRAFO:
         preparar_grafo()
     return jsonify(GRAFO)
-
-@app.route("/api/verificacion")
-def api_verificacion():
-    """Devuelve coordenadas originales y ajustadas a la red vial."""
-    if not PUNTOS_AJUSTADOS:
-        preparar_grafo()
-    
-    resultado = {}
-    for nodo, atractivo in ATRACTIVOS.items():
-        ajustado = PUNTOS_AJUSTADOS.get(nodo, {})
-        resultado[nodo] = {
-            "nombre": atractivo["nombre"],
-            "lat_original": atractivo["lat"],
-            "lng_original": atractivo["lng"],
-            "lat_carretera": ajustado.get("lat", atractivo["lat"]),
-            "lng_carretera": ajustado.get("lng", atractivo["lng"]),
-        }
-    return jsonify(resultado)
 
 @app.route("/api/dias")
 def api_dias():
