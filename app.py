@@ -152,8 +152,8 @@ ATRACTIVOS = {
         "nombre": "Aguadulce",
         "cod": "AGU",
         "tipo": "Hub/Ciudad",
-        "lat": 8.24210,  # CORREGIDO - Ubicación correcta de Aguadulce
-        "lng": -80.53910,
+        "lat": 8.230577743926029,  # CORREGIDO - Ubicación correcta de Aguadulce
+        "lng": -80.55593267294577,   
         "descripcion": "Ciudad conocida por sus salinas"
     },
     17: {
