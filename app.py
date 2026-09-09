@@ -194,8 +194,8 @@ ATRACTIVOS = {
         "nombre": "Cerro Gaital",
         "cod": "CGA",
         "tipo": "Montaña",
-        "lat": 8.6256,
-        "lng": -80.13198,
+        "lat": 8.62562,
+        "lng": -80.12351,
         "descripcion": "Cerro con vista panorámica"
     },
     22: {
