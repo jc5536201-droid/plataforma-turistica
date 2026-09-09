@@ -256,18 +256,21 @@
             border-radius: 12px;
         }
 
-        .custom-marker {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            border: 3px solid white;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .btn-geojson {
+            background: linear-gradient(135deg, #E67E22, #D35400);
             color: white;
-            font-weight: bold;
-            font-size: 10px;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn-geojson:hover {
+            transform: scale(1.02);
+            color: white;
         }
 
         @media (max-width: 768px) {
@@ -399,10 +402,17 @@
     <!-- MAPA Y PANEL -->
     <div class="row g-3">
         <div class="col-md-8">
-            <button class="btn-calcular mb-3" onclick="calcularRuta()">
-                <i class="fas fa-route me-2"></i>
-                Calcular Ruta Óptima con Dijkstra
-            </button>
+            <div class="d-flex gap-2 mb-3">
+                <button class="btn-calcular" onclick="calcularRuta()">
+                    <i class="fas fa-route me-2"></i>
+                    Calcular Ruta Óptima con Dijkstra
+                </button>
+                <button class="btn-geojson" onclick="cargarGeoJSON()" style="width: auto; padding: 14px 25px; margin-top: 0;">
+                    <i class="fas fa-file-upload me-2"></i>
+                    Cargar GeoJSON
+                </button>
+                <input type="file" id="fileInput" accept=".geojson,.json" style="display:none" onchange="procesarGeoJSON(event)">
+            </div>
             <div id="mapa"></div>
         </div>
 
@@ -412,6 +422,11 @@
                     <i class="fas fa-road fa-3x mb-3 d-block" style="color:#dce0e5;"></i>
                     <p>Selecciona origen y destino<br>para calcular la ruta óptima</p>
                     <small>Algoritmo: <strong>Dijkstra</strong></small>
+                    <hr>
+                    <small class="text-muted">
+                        <i class="fas fa-file-alt me-1"></i>
+                        O carga un archivo GeoJSON
+                    </small>
                 </div>
             </div>
         </div>
@@ -458,6 +473,7 @@ const ATRACTIVOS = {{ atractivos|tojson }};
 let criterioActual = 'distancia';
 let mapa = null;
 let rutaLayer = null;
+let rutaGeoJSONLayer = null;
 let marcadoresRuta = [];
 let rutaActual = [];
 let ultimaRuta = null;
@@ -601,6 +617,12 @@ async function calcularRuta() {
         ultimaRuta = data;
         rutaActual = Array.isArray(data.camino) ? data.camino : [origen, destino];
 
+        // Limpiar ruta GeoJSON si existe
+        if (rutaGeoJSONLayer) {
+            mapa.removeLayer(rutaGeoJSONLayer);
+            rutaGeoJSONLayer = null;
+        }
+
         dibujarRuta(data);
         actualizarEstadisticas(data);
         actualizarPanel(data);
@@ -662,6 +684,13 @@ async function calcularRutaDirecta(origen, destino) {
         };
         
         ultimaRuta = rutaData;
+        
+        // Limpiar ruta GeoJSON si existe
+        if (rutaGeoJSONLayer) {
+            mapa.removeLayer(rutaGeoJSONLayer);
+            rutaGeoJSONLayer = null;
+        }
+        
         dibujarRuta(rutaData);
         actualizarEstadisticas(rutaData);
         actualizarPanel(rutaData);
@@ -866,6 +895,135 @@ function actualizarPanel(data) {
 }
 
 // ============================================================
+// CARGAR GEOJSON
+// ============================================================
+
+function cargarGeoJSON() {
+    document.getElementById('fileInput').click();
+}
+
+function procesarGeoJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const geojson = JSON.parse(e.target.result);
+            
+            // Verificar que sea una LineString
+            if (geojson.type === 'Feature' && geojson.geometry.type === 'LineString') {
+                const coords = geojson.geometry.coordinates;
+                const puntos_ruta = coords.map(coord => [coord[1], coord[0]]);
+                
+                // Limpiar ruta anterior si existe
+                if (rutaLayer) {
+                    mapa.removeLayer(rutaLayer);
+                    rutaLayer = null;
+                }
+                
+                if (rutaGeoJSONLayer) {
+                    mapa.removeLayer(rutaGeoJSONLayer);
+                    rutaGeoJSONLayer = null;
+                }
+                
+                marcadoresRuta.forEach(marker => mapa.removeLayer(marker));
+                marcadoresRuta = [];
+                
+                // Dibujar la ruta GeoJSON
+                rutaGeoJSONLayer = L.polyline(puntos_ruta, {
+                    color: '#E74C3C',
+                    weight: 5,
+                    opacity: 0.9,
+                    dashArray: '10, 10',
+                    lineJoin: 'round'
+                }).addTo(mapa);
+                
+                // Ajustar mapa
+                const bounds = rutaGeoJSONLayer.getBounds();
+                if (bounds.isValid()) {
+                    mapa.fitBounds(bounds, { padding: [50, 50] });
+                }
+                
+                // Calcular distancia total
+                let distanciaTotal = 0;
+                for (let i = 0; i < puntos_ruta.length - 1; i++) {
+                    distanciaTotal += calcularDistanciaHaversine(
+                        puntos_ruta[i][0], puntos_ruta[i][1],
+                        puntos_ruta[i+1][0], puntos_ruta[i+1][1]
+                    );
+                }
+                
+                // Actualizar estadísticas
+                document.getElementById('totalDistancia').textContent = `${distanciaTotal.toFixed(2)} km`;
+                document.getElementById('totalTiempo').textContent = `${Math.round(distanciaTotal / 40 * 60)} min`;
+                document.getElementById('totalCosto').textContent = `$${(distanciaTotal * 0.15).toFixed(2)}`;
+                document.getElementById('totalParadas').textContent = `GeoJSON`;
+                
+                // Actualizar panel
+                const panel = document.getElementById('panelRuta');
+                panel.innerHTML = `
+                    <h6 class="fw-bold text-danger mb-3">
+                        <i class="fas fa-file-alt me-2"></i>
+                        Ruta GeoJSON Cargada
+                    </h6>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Esta ruta fue cargada desde un archivo GeoJSON
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span><i class="fas fa-road text-success"></i> ${distanciaTotal.toFixed(2)} km</span>
+                            <span><i class="fas fa-clock text-primary"></i> ${Math.round(distanciaTotal / 40 * 60)} min</span>
+                            <span><i class="fas fa-dollar-sign text-warning"></i> $${(distanciaTotal * 0.15).toFixed(2)}</span>
+                        </div>
+                    </div>
+                    
+                    <p><strong>Puntos:</strong> ${puntos_ruta.length}</p>
+                    <p><strong>Archivo:</strong> ${file.name}</p>
+                    
+                    <button class="btn btn-danger btn-sm w-100 mt-2" onclick="limpiarRutaGeoJSON()">
+                        <i class="fas fa-trash me-1"></i> Eliminar ruta
+                    </button>
+                `;
+                
+            } else {
+                alert('El archivo debe ser un Feature de tipo LineString');
+            }
+        } catch (error) {
+            alert('Error al procesar el archivo GeoJSON: ' + error.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+// ============================================================
+// LIMPIAR RUTA GEOJSON
+// ============================================================
+
+function limpiarRutaGeoJSON() {
+    if (rutaGeoJSONLayer) {
+        mapa.removeLayer(rutaGeoJSONLayer);
+        rutaGeoJSONLayer = null;
+    }
+    
+    document.getElementById('totalDistancia').textContent = '--';
+    document.getElementById('totalTiempo').textContent = '--';
+    document.getElementById('totalCosto').textContent = '--';
+    document.getElementById('totalParadas').textContent = '--';
+    
+    document.getElementById('panelRuta').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="fas fa-road fa-3x mb-3 d-block" style="color:#dce0e5;"></i>
+            <p>Ruta GeoJSON eliminada</p>
+            <small>Selecciona origen y destino para calcular una nueva ruta</small>
+        </div>
+    `;
+}
+
+// ============================================================
 // VOZ
 // ============================================================
 
@@ -887,29 +1045,37 @@ function hablar() {
         return;
     }
 
-    if (!ultimaRuta) {
-        alert('Primero calcula una ruta.');
+    if (!ultimaRuta && !rutaGeoJSONLayer) {
+        alert('Primero calcula una ruta o carga un GeoJSON.');
         return;
     }
 
-    const origen = ultimaRuta.nodos_ruta?.[0]?.nombre || 'el punto de origen';
-    const destino = ultimaRuta.nodos_ruta?.[ultimaRuta.nodos_ruta.length - 1]?.nombre || 'el punto de destino';
-    const distancia = ultimaRuta.distancia_km;
-    const tiempo = ultimaRuta.tiempo_min;
+    let mensaje = '';
+    
+    if (rutaGeoJSONLayer) {
+        const distancia = document.getElementById('totalDistancia').textContent;
+        const tiempo = document.getElementById('totalTiempo').textContent;
+        mensaje = `Ruta turística cargada desde archivo GeoJSON. La distancia total es de ${distancia} y el tiempo estimado es de ${tiempo}. ¡Disfruta tu recorrido!`;
+    } else if (ultimaRuta) {
+        const origen = ultimaRuta.nodos_ruta?.[0]?.nombre || 'el punto de origen';
+        const destino = ultimaRuta.nodos_ruta?.[ultimaRuta.nodos_ruta.length - 1]?.nombre || 'el punto de destino';
+        const distancia = ultimaRuta.distancia_km;
+        const tiempo = ultimaRuta.tiempo_min;
 
-    const nombresCriterio = {
-        distancia: 'distancia mínima',
-        tiempo: 'tiempo mínimo',
-        costo: 'costo mínimo'
-    };
-    const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
+        const nombresCriterio = {
+            distancia: 'distancia mínima',
+            tiempo: 'tiempo mínimo',
+            costo: 'costo mínimo'
+        };
+        const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
 
-    const mensaje = 
-        `Ruta turística por la provincia de Coclé, Panamá. ` +
-        `Utilizando el algoritmo de Dijkstra, se seleccionó la ruta óptima según el criterio de ${criterio}. ` +
-        `El recorrido inicia en ${origen} y termina en ${destino}. ` +
-        `La distancia total es de ${distancia} kilómetros y el tiempo estimado es de ${tiempo} minutos. ` +
-        `¡Disfruta tu recorrido!`;
+        mensaje = 
+            `Ruta turística por la provincia de Coclé, Panamá. ` +
+            `Utilizando el algoritmo de Dijkstra, se seleccionó la ruta óptima según el criterio de ${criterio}. ` +
+            `El recorrido inicia en ${origen} y termina en ${destino}. ` +
+            `La distancia total es de ${distancia} kilómetros y el tiempo estimado es de ${tiempo} minutos. ` +
+            `¡Disfruta tu recorrido!`;
+    }
 
     const utterance = new SpeechSynthesisUtterance(mensaje);
     utterance.lang = 'es-PA';
