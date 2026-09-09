@@ -110,8 +110,8 @@ ATRACTIVOS = {
         "nombre": "Museo Regional Stella Sierra",
         "cod": "MSS",
         "tipo": "Cultural/Hist.",
-        "lat": 8.243149645299233,  # CORREGIDO - Está en Aguadulce
-        "lng": -80.53979650337251,  
+        "lat": 8.241049,  # CORREGIDO - Está en Aguadulce
+        "lng": -80.539833,   
         "descripcion": "Museo regional en Aguadulce"
     },
     12: {
