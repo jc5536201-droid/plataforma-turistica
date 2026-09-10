@@ -58,8 +58,8 @@ ATRACTIVOS = {
         "nombre": "Playa Juan Hombrón",
         "cod": "PJH",
         "tipo": "Playa",
-        "lat": 8.31970,
-        "lng": -80.20526,
+        "lat": 8.317049, 
+        "lng": -80.205259,
         "descripcion": "Playa con aguas cristalinas"
     },
 
