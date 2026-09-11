@@ -477,7 +477,6 @@ let rutaGeoJSONLayer = null;
 let marcadoresRuta = [];
 let rutaActual = [];
 let ultimaRuta = null;
-let DIAS_CACHE = null;
 
 // ============================================================
 // INICIALIZAR MAPA
@@ -576,7 +575,7 @@ function seleccionarCriterio(criterio) {
 }
 
 // ============================================================
-// CALCULAR RUTA (un solo tramo origen -> destino)
+// CALCULAR RUTA
 // ============================================================
 
 async function calcularRuta() {
@@ -598,10 +597,27 @@ async function calcularRuta() {
     `;
 
     try {
-        const data = await obtenerRutaDijkstra(origen, destino, criterioActual);
+        const respuesta = await fetch('/api/ruta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                origen: origen,
+                destino: destino,
+                criterio: criterioActual
+            })
+        });
+
+        const data = await respuesta.json();
+
+        if (!respuesta.ok || !data.exito) {
+            await calcularRutaDirecta(origen, destino);
+            return;
+        }
+
         ultimaRuta = data;
         rutaActual = Array.isArray(data.camino) ? data.camino : [origen, destino];
 
+        // Limpiar ruta GeoJSON si existe
         if (rutaGeoJSONLayer) {
             mapa.removeLayer(rutaGeoJSONLayer);
             rutaGeoJSONLayer = null;
@@ -613,46 +629,12 @@ async function calcularRuta() {
 
     } catch (error) {
         console.error('Error:', error);
-        const dataDirecta = await calcularRutaDirecta(origen, destino);
-        if (dataDirecta) {
-            ultimaRuta = dataDirecta;
-            if (rutaGeoJSONLayer) {
-                mapa.removeLayer(rutaGeoJSONLayer);
-                rutaGeoJSONLayer = null;
-            }
-            dibujarRuta(dataDirecta);
-            actualizarEstadisticas(dataDirecta);
-            actualizarPanel(dataDirecta);
-        }
+        await calcularRutaDirecta(origen, destino);
     }
 }
 
 // ============================================================
-// OBTENER RUTA DIJKSTRA (llamada reutilizable a /api/ruta)
-// Se separó de calcularRuta() para poder reutilizarla en
-// cargarDia() cuando hay que encadenar varios tramos.
-// ============================================================
-
-async function obtenerRutaDijkstra(origen, destino, criterio) {
-    const respuesta = await fetch('/api/ruta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origen, destino, criterio })
-    });
-
-    const data = await respuesta.json();
-
-    if (!respuesta.ok || !data.exito) {
-        throw new Error(data.error || 'No se pudo calcular la ruta con Dijkstra');
-    }
-
-    return data;
-}
-
-// ============================================================
-// RUTA DIRECTA (FALLBACK) - ahora devuelve el objeto en vez
-// de escribir directamente en el DOM, para poder reutilizarla
-// tanto desde calcularRuta() como desde cargarDia()
+// RUTA DIRECTA (FALLBACK)
 // ============================================================
 
 async function calcularRutaDirecta(origen, destino) {
@@ -674,7 +656,7 @@ async function calcularRutaDirecta(origen, destino) {
             destinoCoords.lng_carretera || destinoCoords.lng
         );
         
-        return {
+        const rutaData = {
             exito: true,
             camino: [origen, destino],
             nodos_ruta: [
@@ -701,6 +683,18 @@ async function calcularRutaDirecta(origen, destino) {
             nodos_visitados: 2
         };
         
+        ultimaRuta = rutaData;
+        
+        // Limpiar ruta GeoJSON si existe
+        if (rutaGeoJSONLayer) {
+            mapa.removeLayer(rutaGeoJSONLayer);
+            rutaGeoJSONLayer = null;
+        }
+        
+        dibujarRuta(rutaData);
+        actualizarEstadisticas(rutaData);
+        actualizarPanel(rutaData);
+        
     } catch (error) {
         console.error('Error en ruta directa:', error);
         const panel = document.getElementById('panelRuta');
@@ -710,7 +704,6 @@ async function calcularRutaDirecta(origen, destino) {
                 ${error.message}
             </div>
         `;
-        return null;
     }
 }
 
@@ -813,8 +806,8 @@ function dibujarRuta(data) {
 // ============================================================
 
 function actualizarEstadisticas(data) {
-    document.getElementById('totalDistancia').textContent = `${Number(data.distancia_km).toFixed(2)} km`;
-    document.getElementById('totalTiempo').textContent = `${Math.round(data.tiempo_min)} min`;
+    document.getElementById('totalDistancia').textContent = `${data.distancia_km} km`;
+    document.getElementById('totalTiempo').textContent = `${data.tiempo_min} min`;
     document.getElementById('totalCosto').textContent = `$${Number(data.costo).toFixed(2)}`;
     document.getElementById('totalParadas').textContent = data.nodos_ruta.length;
 }
@@ -1118,8 +1111,6 @@ async function cargarDias() {
     try {
         const respuesta = await fetch('/api/dias');
         const dias = await respuesta.json();
-        DIAS_CACHE = dias; // <-- se guarda en caché para que cargarDia() use los MISMOS datos
-
         const container = document.getElementById('diasContainer');
         container.innerHTML = '';
 
@@ -1147,120 +1138,25 @@ async function cargarDias() {
 
 // ============================================================
 // CARGAR UN DÍA
-//
-// CORRECCIÓN: antes esta función usaba un objeto "diasMap"
-// hardcodeado en el JS (desincronizado de /api/dias) y solo
-// calculaba Dijkstra entre el primer y el último destino del
-// día, ignorando los puntos intermedios.
-//
-// Ahora:
-//  1) Usa DIAS_CACHE, que viene del mismo /api/dias que ya
-//     pinta las tarjetas, así que nunca se desincroniza.
-//  2) Encadena Dijkstra tramo por tramo entre CADA par de
-//     destinos consecutivos del día (A→B, B→C, C→D...) y
-//     dibuja todos los tramos, sumando distancia/tiempo/costo.
-//     Esto sí demuestra que la ruta pasa por todos los
-//     atractivos del día, no solo del primero al último.
 // ============================================================
 
-async function cargarDia(diaNum) {
-    if (!DIAS_CACHE) {
-        console.warn('Los días aún no se han cargado desde /api/dias');
-        return;
-    }
-
-    const dia = DIAS_CACHE.find(d => d.dia === diaNum);
-    if (!dia || !Array.isArray(dia.destinos) || dia.destinos.length < 2) {
-        console.warn(`Día ${diaNum} no tiene al menos 2 destinos`);
-        return;
-    }
-
-    const destinos = dia.destinos;
-    document.getElementById('origenSelect').value = destinos[0];
-    document.getElementById('destinoSelect').value = destinos[destinos.length - 1];
-
-    const panel = document.getElementById('panelRuta');
-    panel.innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border text-success" role="status"></div>
-            <p class="mt-3 mb-1">Calculando itinerario del día ${diaNum}...</p>
-            <small class="text-muted">Encadenando Dijkstra entre ${destinos.length} atractivos</small>
-        </div>
-    `;
-
-    try {
-        // Un tramo de Dijkstra por cada par consecutivo de destinos del día
-        const tramos = [];
-        for (let i = 0; i < destinos.length - 1; i++) {
-            const tramo = await obtenerRutaDijkstra(destinos[i], destinos[i + 1], criterioActual);
-            tramos.push(tramo);
-        }
-
-        const dataCombinada = combinarTramos(tramos);
-        ultimaRuta = dataCombinada;
-
-        if (rutaGeoJSONLayer) {
-            mapa.removeLayer(rutaGeoJSONLayer);
-            rutaGeoJSONLayer = null;
-        }
-
-        dibujarRuta(dataCombinada);
-        actualizarEstadisticas(dataCombinada);
-        actualizarPanel(dataCombinada);
-
-    } catch (error) {
-        console.error('Error calculando itinerario del día:', error);
-        panel.innerHTML = `
-            <div class="alert alert-danger">
-                <strong>Error:</strong> No se pudo calcular el itinerario del día ${diaNum}.<br>
-                ${error.message}
-            </div>
-        `;
-    }
-}
-
-// ============================================================
-// COMBINAR TRAMOS
-// Une varios resultados de /api/ruta (uno por cada par de
-// destinos consecutivos) en un solo objeto de ruta, para que
-// dibujarRuta()/actualizarEstadisticas()/actualizarPanel()
-// puedan mostrarlo igual que una ruta de un solo tramo.
-// ============================================================
-
-function combinarTramos(tramos) {
-    const puntos_ruta = [];
-    const nodos_ruta = [];
-    const segmentos = [];
-    let distancia_km = 0;
-    let tiempo_min = 0;
-    let costo = 0;
-
-    tramos.forEach((tramo, i) => {
-        // puntos_ruta: evitar duplicar el punto de unión entre tramos
-        const puntos = i === 0 ? tramo.puntos_ruta : tramo.puntos_ruta.slice(1);
-        puntos_ruta.push(...puntos);
-
-        // nodos_ruta: evitar duplicar el nodo de unión entre tramos
-        const nodos = i === 0 ? tramo.nodos_ruta : tramo.nodos_ruta.slice(1);
-        nodos_ruta.push(...nodos);
-
-        segmentos.push(...(tramo.segmentos || []));
-
-        distancia_km += Number(tramo.distancia_km) || 0;
-        tiempo_min += Number(tramo.tiempo_min) || 0;
-        costo += Number(tramo.costo) || 0;
-    });
-
-    return {
-        exito: true,
-        puntos_ruta,
-        nodos_ruta,
-        segmentos,
-        distancia_km,
-        tiempo_min,
-        costo,
-        criterio: criterioActual
+function cargarDia(dia) {
+    const diasMap = {
+        1: [1,2,4,5,17],
+        2: [8,22,12,14,15],
+        3: [18,20,23,24,13,9],
+        4: [10,25,26,19],
+        5: [6,7,28,21,29],
+        6: [16,3,27,11],
+        7: [15,18,20,23,24]
     };
+
+    const destinos = diasMap[dia];
+    if (destinos && destinos.length >= 2) {
+        document.getElementById('origenSelect').value = destinos[0];
+        document.getElementById('destinoSelect').value = destinos[destinos.length - 1];
+        calcularRuta();
+    }
 }
 
 // ============================================================
