@@ -16,6 +16,9 @@ COSTO_POR_KM = 0.15
 TIMEOUT = 30
 MAX_RETRIES = 3
 
+# Velocidad de referencia SOLO para el fallback Haversine (km/h)
+VELOCIDAD_FALLBACK_KMH = 40
+
 # ============================================================
 # ATRACTIVOS TURÍSTICOS - COORDENADAS DESDE GOOGLE MAPS
 # ============================================================
@@ -292,8 +295,9 @@ def obtener_punto_carretera(lat, lng):
 
 
 def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
+    """Obtiene la ruta entre DOS puntos. Se usa para construir el grafo."""
     url = f"{OSRM_URL}/route/v1/driving/{origen_lng},{origen_lat};{destino_lng},{destino_lat}"
-    params = {"overview": "full", "geometries": "geojson", "steps": "true"}
+    params = {"overview": "full", "geometries": "geojson", "steps": "false"}
     for intento in range(MAX_RETRIES):
         try:
             respuesta = requests.get(url, params=params, timeout=TIMEOUT)
@@ -303,21 +307,10 @@ def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
                 distancia_km = ruta["distance"] / 1000
                 tiempo_min = ruta["duration"] / 60
                 costo = distancia_km * COSTO_POR_KM
-                geometria = ruta["geometry"]["coordinates"]
-                puntos_ruta = [[coord[1], coord[0]] for coord in geometria]
-                instrucciones = []
-                for tramo in ruta.get("legs", []):
-                    for paso in tramo.get("steps", []):
-                        maneuver = paso.get("maneuver", {})
-                        instruction = maneuver.get("instruction")
-                        if instruction:
-                            instrucciones.append(instruction)
                 return {
-                    "distancia_km": round(distancia_km, 2),
-                    "tiempo_min": round(tiempo_min, 2),
-                    "costo": round(costo, 2),
-                    "puntos_ruta": puntos_ruta,
-                    "instrucciones": instrucciones,
+                    "distancia_km": distancia_km,   # sin redondear
+                    "tiempo_min": tiempo_min,       # sin redondear
+                    "costo": costo,                 # sin redondear
                     "exito": True
                 }
             time.sleep(1)
@@ -328,13 +321,16 @@ def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
 
 
 def peso_arista_fallback(lat1, lng1, lat2, lng2):
+    """Si OSRM falla para una arista puntual, se usa Haversine como respaldo."""
     dist_km = distancia_haversine(lat1, lng1, lat2, lng2)
-    tiempo_min = (dist_km / 40) * 60
+    tiempo_min = (dist_km / VELOCIDAD_FALLBACK_KMH) * 60
     costo = dist_km * COSTO_POR_KM
-    return round(dist_km, 2), round(tiempo_min, 2), round(costo, 2)
+    return dist_km, tiempo_min, costo
 
 
 def construir_grafo_hub(puntos):
+    """Construye el grafo SOLO con las aristas de la topología
+    atractivo<->hub y hub<->hub. Guarda valores SIN redondear."""
     grafo = {nodo: {} for nodo in puntos}
     for a, b in edges_topologia():
         if a not in puntos or b not in puntos:
@@ -445,44 +441,100 @@ def dijkstra(grafo, origen, destino, criterio):
         camino.append(nodo)
         nodo = anteriores[nodo]
     camino.reverse()
-    return {"camino": camino, "peso_total": round(distancias[destino], 2), "criterio": criterio}
+    return {"camino": camino, "peso_total": distancias[destino], "criterio": criterio}
 
+# ============================================================
+# MÉTRICAS OFICIALES DEL CAMINO COMPLETO (UNA SOLA LLAMADA A OSRM)
+# ============================================================
+# Esta función es la fuente ÚNICA de verdad para:
+#   - distancia total
+#   - tiempo total
+#   - costo total
+#   - geometría dibujada en el mapa
+# Los segmentos del grafo quedan SOLO como detalle informativo.
+# ============================================================
 
-def obtener_geometria_camino(camino):
+def obtener_metricas_camino_completo(camino):
     if not camino or len(camino) < 2:
-        return []
+        return {
+            "puntos_ruta": [],
+            "distancia_km": 0.0,
+            "tiempo_min": 0.0,
+            "costo": 0.0,
+            "fuente": "vacio",
+            "exito": False
+        }
+
+    # Coordenadas ajustadas a carretera para cada nodo del camino
     puntos = []
     for nodo in camino:
         if nodo in PUNTOS_AJUSTADOS:
-            puntos.append({"lat": PUNTOS_AJUSTADOS[nodo]["lat"], "lng": PUNTOS_AJUSTADOS[nodo]["lng"]})
+            puntos.append({
+                "lat": PUNTOS_AJUSTADOS[nodo]["lat"],
+                "lng": PUNTOS_AJUSTADOS[nodo]["lng"]
+            })
         elif nodo in ATRACTIVOS:
-            puntos.append({"lat": ATRACTIVOS[nodo]["lat"], "lng": ATRACTIVOS[nodo]["lng"]})
-    if len(puntos) >= 2:
-        coord_str = ";".join(f"{p['lng']},{p['lat']}" for p in puntos)
-        url = f"{OSRM_URL}/route/v1/driving/{coord_str}"
-        params = {"overview": "full", "geometries": "geojson", "steps": "true"}
+            puntos.append({
+                "lat": ATRACTIVOS[nodo]["lat"],
+                "lng": ATRACTIVOS[nodo]["lng"]
+            })
+
+    if len(puntos) < 2:
+        return {
+            "puntos_ruta": [],
+            "distancia_km": 0.0,
+            "tiempo_min": 0.0,
+            "costo": 0.0,
+            "fuente": "vacio",
+            "exito": False
+        }
+
+    coord_str = ";".join(f"{p['lng']},{p['lat']}" for p in puntos)
+    url = f"{OSRM_URL}/route/v1/driving/{coord_str}"
+    params = {"overview": "full", "geometries": "geojson", "steps": "false"}
+
+    for intento in range(MAX_RETRIES):
         try:
             respuesta = requests.get(url, params=params, timeout=60)
             data = respuesta.json()
             if respuesta.status_code == 200 and data.get("code") == "Ok":
                 ruta = data["routes"][0]
+                dist = ruta["distance"] / 1000.0
+                tmin = ruta["duration"] / 60.0
                 geometria = ruta["geometry"]["coordinates"]
-                return [[coord[1], coord[0]] for coord in geometria]
+                return {
+                    "puntos_ruta": [[c[1], c[0]] for c in geometria],
+                    "distancia_km": dist,
+                    "tiempo_min": tmin,
+                    "costo": dist * COSTO_POR_KM,
+                    "fuente": "osrm",
+                    "exito": True
+                }
+            time.sleep(1)
         except Exception as e:
-            print("Error obteniendo geometría:", e)
-        puntos_ruta = []
-        for i in range(len(puntos) - 1):
-            inicio = puntos[i]
-            fin = puntos[i + 1]
-            num_puntos = 20
-            for j in range(num_puntos):
-                t = j / num_puntos
-                lat = inicio["lat"] + (fin["lat"] - inicio["lat"]) * t
-                lng = inicio["lng"] + (fin["lng"] - inicio["lng"]) * t
-                puntos_ruta.append([lat, lng])
-            puntos_ruta.append([fin["lat"], fin["lng"]])
-        return puntos_ruta
-    return []
+            print(f"Intento {intento+1} falló (camino completo): {e}")
+            time.sleep(1)
+
+    # ---- Fallback: Haversine por pares de puntos consecutivos ----
+    dist_total = 0.0
+    puntos_ruta = []
+    for i in range(len(puntos) - 1):
+        a = puntos[i]
+        b = puntos[i + 1]
+        dist_total += distancia_haversine(a["lat"], a["lng"], b["lat"], b["lng"])
+        if i == 0:
+            puntos_ruta.append([a["lat"], a["lng"]])
+        puntos_ruta.append([b["lat"], b["lng"]])
+
+    tmin = (dist_total / VELOCIDAD_FALLBACK_KMH) * 60
+    return {
+        "puntos_ruta": puntos_ruta,
+        "distancia_km": dist_total,
+        "tiempo_min": tmin,
+        "costo": dist_total * COSTO_POR_KM,
+        "fuente": "haversine",
+        "exito": False
+    }
 
 # ============================================================
 # RUTAS DE LA API
@@ -510,31 +562,34 @@ def api_ruta():
 
         asegurar_grafo_actualizado()
 
+        # 1) Dijkstra decide el CAMINO (nodos) según el criterio
         resultado_dijkstra = dijkstra(GRAFO, origen, destino, criterio)
         if resultado_dijkstra is None:
-            return jsonify({"exito": False, "error": "No se encontró un camino entre los nodos seleccionados."}), 404
+            return jsonify({"exito": False,
+                            "error": "No se encontró un camino entre los nodos seleccionados."}), 404
 
         camino = resultado_dijkstra["camino"]
-        puntos_ruta = obtener_geometria_camino(camino)
 
-        distancia_total = 0
-        tiempo_total = 0
-        costo_total = 0
+        # 2) UNA SOLA llamada a OSRM con TODOS los waypoints del camino
+        #    => totales oficiales y geometría coherente con lo que se dibuja
+        metricas = obtener_metricas_camino_completo(camino)
+        puntos_ruta = metricas["puntos_ruta"]
+        distancia_total = metricas["distancia_km"]
+        tiempo_total = metricas["tiempo_min"]
+        costo_total = metricas["costo"]
+
+        # 3) Segmentos del grafo: SOLO detalle informativo
         segmentos = []
-
         for i in range(len(camino) - 1):
-            nodo_a = camino[i]
-            nodo_b = camino[i + 1]
-            datos_segmento = GRAFO[nodo_a][nodo_b]
-            distancia_total += datos_segmento["distancia_km"]
-            tiempo_total += datos_segmento["tiempo_min"]
-            costo_total += datos_segmento["costo"]
+            a = camino[i]
+            b = camino[i + 1]
+            d = GRAFO[a][b]
             segmentos.append({
-                "origen": nodo_a,
-                "destino": nodo_b,
-                "distancia_km": datos_segmento["distancia_km"],
-                "tiempo_min": datos_segmento["tiempo_min"],
-                "costo": datos_segmento["costo"]
+                "origen": a,
+                "destino": b,
+                "distancia_km": round(d["distancia_km"], 2),
+                "tiempo_min": round(d["tiempo_min"], 2),
+                "costo": round(d["costo"], 2)
             })
 
         nodos_ruta = []
@@ -555,11 +610,14 @@ def api_ruta():
             "criterio": criterio,
             "camino": camino,
             "nodos_ruta": nodos_ruta,
+            # === Totales OFICIALES (OSRM ruta completa) ===
             "distancia_km": round(distancia_total, 2),
-            "tiempo_min": round(tiempo_total),
+            "tiempo_min": round(tiempo_total, 2),
             "costo": round(costo_total, 2),
+            "fuente_metricas": metricas["fuente"],   # "osrm" o "haversine"
+            # === Detalle ===
             "puntos_ruta": puntos_ruta,
-            "segmentos": segmentos,
+            "segmentos": segmentos,                  # informativo
             "nodos_visitados": len(camino)
         })
     except Exception as e:
