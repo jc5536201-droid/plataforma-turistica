@@ -26,40 +26,40 @@ ATRACTIVOS = {
         "nombre": "Playa Santa Clara",
         "cod": "PSC",
         "tipo": "Playa",
-        "lat": 8.37419578726282,
-        "lng": -80.105684995601,
+        "lat": 8.37388,
+        "lng": -80.10569,
         "descripcion": "Playa de arena blanca y aguas tranquilas"
     },
     2: {
         "nombre": "Playa Farallón",
         "cod": "PFA",
         "tipo": "Playa",
-        "lat": 8.36131369011191,
-        "lng": -80.1299423146462,
+        "lat": 8.3613, 
+        "lng": -80.12977,
         "descripcion": "Playa con olas moderadas y arena dorada"
     },
     3: {
         "nombre": "Playa El Salado",
         "cod": "PES",
         "tipo": "Playa",
-        "lat": 8.20468120485968,
-        "lng": -80.4835029603389,
+        "lat": 8.20159, 
+        "lng": -80.48353,
         "descripcion": "Playa tranquila cerca de Aguadulce"
     },
     4: {
         "nombre": "Playa Blanca",
         "cod": "PBL",
         "tipo": "Playa",
-        "lat": 8.355369374558986, 
-        "lng": -80.1525422288265,
+        "lat": 8.34595, 
+        "lng": -80.15175,
         "descripcion": "Hermosa playa de arena blanca"
     },
     5: {
         "nombre": "Playa Juan Hombrón",
         "cod": "PJH",
         "tipo": "Playa",
-        "lat": 8.319702725314118,
-        "lng": -80.205259322496, 
+        "lat":  8.29827,
+        "lng": -80.25338, 
         "descripcion": "Playa con aguas cristalinas"
     },
 
@@ -68,40 +68,40 @@ ATRACTIVOS = {
         "nombre": "Mercado Artesanía Valle Antón",
         "cod": "MAV",
         "tipo": "Cultural", 
-        "lat": 8.62000703920119,
-        "lng": -80.13119134282249,
+        "lat":  8.60408, 
+        "lng": -80.13115,
         "descripcion": "Mercado de artesanías típicas"
     },
     7: {
         "nombre": "Serpentario Maravillas Tropicales",
         "cod": "SMT",
         "tipo": "Naturaleza",
-        "lat": 8.615254784798621,
-        "lng": -80.1153984960061, 
+        "lat": 8.60162, 
+        "lng": -80.11503, 
         "descripcion": "Exhibición de serpientes y reptiles"
     },
     8: {
         "nombre": "Museo Hermanos Arias Madrid",
         "cod": "MHA",
         "tipo": "Cultural/Hist.",
-        "lat": 8.524323907321909,
-        "lng": -80.35743713129858,
+        "lat": 8.52497, 
+        "lng": -80.35677,
         "descripcion": "Museo histórico en Penonomé"
     },
     9: {
         "nombre": "P.N. Omar Torrijos",
         "cod": "PNT",
         "tipo": "Parque Nacional",
-        "lat": 8.687263387812841,
-        "lng": -80.64376830805044,
+        "lat": 8.68788,
+        "lng": -80.64378,  
         "descripcion": "Parque Nacional con senderos ecológicos"
     },
     10: {
         "nombre": "Sitio Arqueológico El Caño",
         "cod": "SAC",
-        "tipo": "Arqueológico",
-        "lat": 8.404523441369742,
-        "lng": -80.50255456863812,
+        "tipo": "Arqueológico", 
+        "lat": 8.3967,
+        "lng": -80.50148,
         "descripcion": "Importante sitio arqueológico precolombino"
     },
 
@@ -110,32 +110,32 @@ ATRACTIVOS = {
         "nombre": "Museo Regional Stella Sierra",
         "cod": "MSS",
         "tipo": "Cultural/Hist.",
-        "lat": 8.241049,  # CORREGIDO - Está en Aguadulce
-        "lng": -80.539833,   
+        "lat": 8.24104,  # CORREGIDO - Está en Aguadulce
+        "lng": -80.5398,   
         "descripcion": "Museo regional en Aguadulce"
     },
     12: {
         "nombre": "Iglesia San Juan Bautista",
         "cod": "ISJ",
         "tipo": "Histórico",
-        "lat": 8.521862306334082,
-        "lng": -80.35898208493045,
+        "lat": 8.52188, 
+        "lng": -80.35936,
         "descripcion": "Iglesia histórica en Penonomé"    
     },
     13: {
         "nombre": "El Chorro Las Yayas",
         "cod": "CLY",
         "tipo": "Cascada",
-        "lat": 8.64834026433998, 
-        "lng": -80.58994003610626,
+        "lat": 8.64588,  
+        "lng": -80.58997,
         "descripcion": "Hermosa cascada en La Pintada"
     },
     14: {
         "nombre": "Balneario Las Mendozas",
         "cod": "BLM",
         "tipo": "Balneario",
-        "lat": 8.53807462769825, 
-        "lng": -80.35400390374167,
+        "lat": 8.52654,  
+        "lng": -80.35536,
         "descripcion": "Balneario natural cerca de Penonomé"
     },
 
@@ -144,40 +144,40 @@ ATRACTIVOS = {
         "nombre": "Penonomé",
         "cod": "PEN",
         "tipo": "Hub/Ciudad",
-        "lat": 8.549957567841561, 
-        "lng": -80.36499023223222,
+        "lat": 8.55029,  
+        "lng": -80.35474,
         "descripcion": "Capital de la provincia de Coclé"
     },
     16: {
         "nombre": "Aguadulce",
         "cod": "AGU",
         "tipo": "Hub/Ciudad",
-        "lat": 8.230577743926029,  # CORREGIDO - Ubicación correcta de Aguadulce
-        "lng": -80.55593267294577,   
+        "lat": 8.23017,  # CORREGIDO - Ubicación correcta de Aguadulce  
+        "lng": -80.55495,   
         "descripcion": "Ciudad conocida por sus salinas"
     },
     17: {
         "nombre": "Antón",
         "cod": "ANT",
         "tipo": "Hub/Ciudad",
-        "lat": 8.401609386317245, 
-        "lng": -80.27115880389621,
+        "lat": 8.40186,  
+        "lng": -80.27115,
         "descripcion": "Ciudad cerca de las playas"
     },
     18: {
         "nombre": "La Pintada",
         "cod": "LAP",
         "tipo": "Hub/Ciudad",
-        "lat": 8.593242282695405,  # CORREGIDO 
-        "lng": -80.44721603144511,
+        "lat":  8.59331,  # CORREGIDO  
+        "lng": -80.44655,
         "descripcion": "Ciudad conocida por sus artesanías"
     },
     19: {
         "nombre": "Natá",
         "cod": "NAT",
         "tipo": "Hub/Ciudad",
-        "lat": 8.30237715013278,  # CORREGIDO 
-        "lng": -80.43262481439811,
+        "lat": 8.30297,  # CORREGIDO  
+        "lng": -80.43265,
         "descripcion": "Ciudad histórica con iglesia colonial"
     },
 
@@ -186,80 +186,80 @@ ATRACTIVOS = {
         "nombre": "Parroquia Ntra. Sra. Candelaria",
         "cod": "PNC",
         "tipo": "Histórico",
-        "lat": 8.59256334486783,  # CORREGIDO - Está en La Pintada  
-        "lng": -80.44652938593724,
+        "lat": 8.59308,  # CORREGIDO - Está en La Pintada  
+        "lng": -80.44582,
         "descripcion": "Iglesia histórica en La Pintada"
     },
     21: {
         "nombre": "Cerro Gaital",
         "cod": "CGA",
         "tipo": "Montaña",
-        "lat": 8.61812182015115,  
-        "lng": -80.11677178674391,
+        "lat": 8.61666,   
+        "lng": -80.11666,
         "descripcion": "Cerro con vista panorámica"
     },
     22: {
         "nombre": "Museo de Penonomé",
         "cod": "MPE",
         "tipo": "Cultural",
-        "lat": 8.519723853453177, 
-        "lng": -80.3606780788878,
+        "lat": 8.51959,  
+        "lng": -80.36056,
         "descripcion": "Museo histórico en Penonomé"
     },
     23: {
         "nombre": "Mercado Artesanías La Pintada",
         "cod": "MLA",
         "tipo": "Cultural",
-        "lat": 8.589890015344062,  # CORREGIDO 
-        "lng": -80.44150829109194,
+        "lat": 8.59702,  # CORREGIDO 
+        "lng": -80.44881,
         "descripcion": "Mercado de artesanías en La Pintada"
     },
     24: {
         "nombre": "Balneario Los Algarrobos",
         "cod": "BAL",
         "tipo": "Naturaleza",
-        "lat": 8.59850400964035,  # CORREGIDO 
-        "lng": -80.44361114252906,
+        "lat": 8.59377,  # CORREGIDO 
+        "lng": -80.44295,
         "descripcion": "Balneario natural cerca de La Pintada"
     },
     25: {
         "nombre": "Iglesia Santiago Apóstol",
         "cod": "ISA",
         "tipo": "Histórico",
-        "lat": 8.33027365328157, 
-        "lng": -80.51477595341508,
+        "lat":  8.33215, 
+        "lng": -80.51524,
         "descripcion": "Iglesia colonial en Natá"
     },
     26: {
         "nombre": "Ecoparque Don Arcelio",
         "cod": "ECO",
         "tipo": "Naturaleza",
-        "lat": 8.380546087957791, 
-        "lng": -80.53056880023149,
+        "lat":  8.38084, 
+        "lng": -80.5289,
         "descripcion": "Parque ecológico cerca de Natá"
     },
     27: {
         "nombre": "Salinas de Aguadulce",
         "cod": "SAL",
         "tipo": "Naturaleza",
-        "lat": 8.202190051975156,  # CORREGIDO - Cerca de Aguadulce
-        "lng":  -80.49660110033349,
+        "lat": 8.20203,  # CORREGIDO - Cerca de Aguadulce 
+        "lng":  -80.4962,
         "descripcion": "Salinas tradicionales"
     },
     28: {
         "nombre": "Mariposario",
         "cod": "MAR",
         "tipo": "Naturaleza",
-        "lat": 8.600997663400143, 
-        "lng": -80.12844476076745,
+        "lat": 8.60141, 
+        "lng": -80.12923, 
         "descripcion": "Jardín de mariposas"
     },
     29: {
         "nombre": "Canopy Adventure",
         "cod": "CAN",
         "tipo": "Aventura",
-        "lat": 8.625407314878048,
-        "lng": -80.13892822612566,   
+        "lat": 8.62585,  
+        "lng": -80.1387,   
         "descripcion": "Tirolesa y aventura en la selva"
     }
 }
