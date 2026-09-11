@@ -92,8 +92,8 @@ ATRACTIVOS = {
         "nombre": "P.N. Omar Torrijos",
         "cod": "PNT",
         "tipo": "Parque Nacional",
-        "lat": 8.6801,
-        "lng": -80.7042,
+        "lat": 8.6652, 
+        "lng": -80.7028,
         "descripcion": "Parque Nacional con senderos ecológicos"
     },
     10: {
