@@ -33,11 +33,7 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
-        .header h1 {
-            font-weight: 700;
-            font-size: 2rem;
-        }
-
+        .header h1 { font-weight: 700; font-size: 2rem; }
         .subtitulo { color: rgba(255,255,255,0.85); }
 
         /* ÁGUILA HARPÍA */
@@ -46,7 +42,6 @@
             align-items: center;
             justify-content: center;
             gap: 12px;
-            position: relative;
         }
 
         .harpia {
@@ -60,10 +55,7 @@
         }
 
         .harpia:hover { transform: scale(1.15); }
-
-        .harpia.hablando {
-            animation: aletear 0.6s ease-in-out infinite;
-        }
+        .harpia.hablando { animation: aletear 0.6s ease-in-out infinite; }
 
         @keyframes flotar {
             0%, 100% { transform: translateY(0); }
@@ -88,7 +80,6 @@
         }
 
         .btn-harpia:hover { transform: scale(1.05); color: white; }
-
         .btn-harpia.escuchando {
             background: linear-gradient(135deg, #E74C3C, #C0392B);
             animation: pulso 1.5s infinite;
@@ -653,6 +644,7 @@ async function calcularRutaDirecta(origen, destino) {
                 distancia_km: dist, tiempo_min: Math.round(dist / 40 * 60), costo: dist * 0.15
             }],
             criterio: criterioActual,
+            fuente_metricas: 'haversine',
             nodos_visitados: 2
         };
     } catch (error) {
@@ -736,11 +728,24 @@ function actualizarPanel(data) {
     };
     const nombreCriterio = nombresCriterio[data.criterio] || data.criterio || 'Criterio seleccionado';
 
+    // Badge de fuente de métricas
+    const fuenteMetricas = data.fuente_metricas || 'osrm';
+    const badgeMetricas = fuenteMetricas === 'osrm'
+        ? `<span class="badge bg-success ms-1" title="Métricas calculadas por OSRM (ruta completa encadenada)">
+              <i class="fas fa-check-circle me-1"></i>Métricas: OSRM
+           </span>`
+        : `<span class="badge bg-warning text-dark ms-1" title="OSRM no respondió, se usó Haversine como aproximación">
+              <i class="fas fa-exclamation-triangle me-1"></i>Métricas: aproximadas
+           </span>`;
+
     let html = `
         <h6 class="fw-bold text-success mb-3">
             <i class="fas fa-route me-2"></i>
             Ruta óptima <span class="badge bg-success ms-2">Dijkstra</span>
         </h6>
+
+        <div class="mb-2">${badgeMetricas}</div>
+
         <div class="alert alert-light border"><strong>Criterio:</strong> ${nombreCriterio}</div>
         <div class="mb-3">
             <div class="d-flex justify-content-between">
@@ -772,7 +777,7 @@ function actualizarPanel(data) {
     }
 
     if (Array.isArray(data.segmentos) && data.segmentos.length > 0) {
-        html += `<hr><h6 class="fw-bold">Detalle de los tramos</h6>`;
+        html += `<hr><h6 class="fw-bold">Detalle de los tramos (grafo)</h6>`;
         data.segmentos.forEach((tramo, indice) => {
             const origen = data.nodos_ruta?.find(n => Number(n.id) === Number(tramo.origen));
             const destino = data.nodos_ruta?.find(n => Number(n.id) === Number(tramo.destino));
@@ -916,13 +921,18 @@ function hablarHarpia() {
         };
         const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
 
+        const notaMetricas = (ultimaRuta.fuente_metricas === 'haversine')
+            ? ' Ten en cuenta que estas métricas son aproximadas, porque el servicio de rutas no respondió en este momento.'
+            : '';
+
         mensaje =
             `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá, y te acompañaré en este recorrido. ` +
             `Usando el algoritmo de Dijkstra, se calculó la ruta óptima según el criterio de ${criterio}. ` +
             `El recorrido inicia en ${origen} y termina en ${destino}, pasando por ${ultimaRuta.nodos_ruta.length} atractivos. ` +
             `La distancia total es de ${distancia} kilómetros, el tiempo estimado es de ${tiempo} minutos ` +
-            `y el costo aproximado es de ${costo} dólares. ` +
-            `¡Disfruta tu recorrido por la provincia de Coclé!`;
+            `y el costo aproximado es de ${costo} dólares.` +
+            notaMetricas +
+            ` ¡Disfruta tu recorrido por la provincia de Coclé!`;
     } else {
         mensaje =
             `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá. ` +
@@ -964,12 +974,9 @@ function hablarHarpia() {
     window.speechSynthesis.speak(utterance);
 }
 
-// Permitir clic en el emoji del águila
 document.addEventListener('DOMContentLoaded', function() {
     const harpia = document.getElementById('harpia');
-    if (harpia) {
-        harpia.addEventListener('click', hablarHarpia);
-    }
+    if (harpia) harpia.addEventListener('click', hablarHarpia);
 });
 
 // ============================================================
@@ -1042,6 +1049,7 @@ async function cargarDia(diaNum) {
 function combinarTramos(tramos) {
     const puntos_ruta = [], nodos_ruta = [], segmentos = [];
     let distancia_km = 0, tiempo_min = 0, costo = 0;
+    let todasOsrm = true;
 
     tramos.forEach((tramo, i) => {
         const puntos = i === 0 ? tramo.puntos_ruta : tramo.puntos_ruta.slice(1);
@@ -1052,9 +1060,23 @@ function combinarTramos(tramos) {
         distancia_km += Number(tramo.distancia_km) || 0;
         tiempo_min += Number(tramo.tiempo_min) || 0;
         costo += Number(tramo.costo) || 0;
+
+        if ((tramo.fuente_metricas || 'osrm') !== 'osrm') {
+            todasOsrm = false;
+        }
     });
 
-    return { exito: true, puntos_ruta, nodos_ruta, segmentos, distancia_km, tiempo_min, costo, criterio: criterioActual };
+    return {
+        exito: true,
+        puntos_ruta,
+        nodos_ruta,
+        segmentos,
+        distancia_km,
+        tiempo_min,
+        costo,
+        criterio: criterioActual,
+        fuente_metricas: todasOsrm ? 'osrm' : 'haversine'
+    };
 }
 
 // ============================================================
