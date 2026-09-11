@@ -58,7 +58,7 @@ ATRACTIVOS = {
         "nombre": "Playa Juan Hombrón",
         "cod": "PJH",
         "tipo": "Playa",
-        "lat": 8.317049, 
+        "lat": 8.317049,
         "lng": -80.205259,
         "descripcion": "Playa con aguas cristalinas"
     },
@@ -139,7 +139,7 @@ ATRACTIVOS = {
         "descripcion": "Balneario natural cerca de Penonomé"
     },
 
-    # ========== CIUDADES Y PUEBLOS ==========
+    # ========== CIUDADES Y PUEBLOS (HUBS) ==========
     15: {
         "nombre": "Penonomé",
         "cod": "PEN",
@@ -265,6 +265,64 @@ ATRACTIVOS = {
 }
 
 # ============================================================
+# TOPOLOGÍA DEL GRAFO (NUEVO)
+#
+# Antes el grafo conectaba TODOS los atractivos entre sí (grafo
+# completo). Con pesos euclidianos, eso hace que la desigualdad
+# triangular se cumpla siempre en forma estricta, así que Dijkstra
+# terminaba devolviendo SIEMPRE el arco directo origen->destino,
+# sin pasar nunca por un nodo intermedio.
+#
+# Ahora el grafo modela la red vial real de Coclé como una
+# topología de "estrellas conectadas por un anillo de hubs":
+#   - Cada atractivo se conecta SOLO con su hub/ciudad más cercano
+#     (la carretera real que lo comunica con el resto de la red).
+#   - Los 5 hubs (Penonomé, Aguadulce, Antón, La Pintada, Natá) se
+#     conectan entre sí, porque son los que están sobre las vías
+#     principales (Interamericana y carreteras secundarias).
+#
+# Con esto, ir de un atractivo a otro que no comparte hub obliga a
+# Dijkstra a atravesar uno o más hubs intermedios, que es lo que se
+# espera demostrar en una tesis sobre diseño de rutas óptimas.
+# ============================================================
+
+HUBS = {15, 16, 17, 18, 19}
+
+# Atractivo -> hub más cercano (calculado por distancia real y
+# ajustado a la zona administrativa cuando hay ambigüedad, p. ej.
+# El Valle de Antón pertenece al distrito de Antón aunque en línea
+# recta quede casi igual de cerca de Penonomé).
+ASIGNACION_HUB = {
+    # Penonomé (15)
+    12: 15, 8: 15, 14: 15, 22: 15,
+    # Antón (17) — incluye playas y El Valle de Antón
+    5: 17, 4: 17, 2: 17, 1: 17,
+    6: 17, 7: 17, 21: 17, 28: 17, 29: 17,
+    # Aguadulce (16)
+    11: 16, 27: 16, 3: 16,
+    # La Pintada (18)
+    23: 18, 20: 18, 24: 18, 13: 18, 9: 18,
+    # Natá (19)
+    25: 19, 26: 19, 10: 19,
+}
+
+
+def edges_topologia():
+    """Genera la lista de aristas (no dirigidas) del grafo hub-radial:
+    atractivo<->su hub, y hub<->hub (malla completa entre los 5 hubs)."""
+    aristas = []
+
+    for nodo, hub in ASIGNACION_HUB.items():
+        aristas.append((nodo, hub))
+
+    hubs_lista = sorted(HUBS)
+    for i in range(len(hubs_lista)):
+        for j in range(i + 1, len(hubs_lista)):
+            aristas.append((hubs_lista[i], hubs_lista[j]))
+
+    return aristas
+
+# ============================================================
 # FUNCIONES AUXILIARES
 # ============================================================
 
@@ -275,22 +333,22 @@ def distancia_haversine(lat1, lon1, lat2, lon2):
     lat2_rad = math.radians(lat2)
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    
+
     a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon/2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    
+
     return radio_tierra * c
 
 def obtener_punto_carretera(lat, lng):
     """Obtiene el punto más cercano en la red vial."""
     url = f"{OSRM_URL}/nearest/v1/driving/{lng},{lat}"
     params = {"number": 1}
-    
+
     for intento in range(MAX_RETRIES):
         try:
             respuesta = requests.get(url, params=params, timeout=TIMEOUT)
             data = respuesta.json()
-            
+
             if respuesta.status_code == 200 and data.get("code") == "Ok":
                 waypoint = data["waypoints"][0]
                 coordenadas = waypoint["location"]
@@ -303,7 +361,7 @@ def obtener_punto_carretera(lat, lng):
         except Exception as e:
             print(f"Intento {intento+1} falló: {e}")
             time.sleep(1)
-    
+
     return {"exito": False, "error": "No se encontró carretera cercana"}
 
 def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
@@ -314,21 +372,21 @@ def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
         "geometries": "geojson",
         "steps": "true"
     }
-    
+
     for intento in range(MAX_RETRIES):
         try:
             respuesta = requests.get(url, params=params, timeout=TIMEOUT)
             data = respuesta.json()
-            
+
             if respuesta.status_code == 200 and data.get("code") == "Ok":
                 ruta = data["routes"][0]
                 distancia_km = ruta["distance"] / 1000
                 tiempo_min = ruta["duration"] / 60
                 costo = distancia_km * COSTO_POR_KM
-                
+
                 geometria = ruta["geometry"]["coordinates"]
                 puntos_ruta = [[coord[1], coord[0]] for coord in geometria]
-                
+
                 instrucciones = []
                 for tramo in ruta.get("legs", []):
                     for paso in tramo.get("steps", []):
@@ -336,112 +394,71 @@ def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
                         instruction = maneuver.get("instruction")
                         if instruction:
                             instrucciones.append(instruction)
-                
+
                 return {
                     "distancia_km": round(distancia_km, 2),
-                    "tiempo_min": round(tiempo_min),
+                    "tiempo_min": round(tiempo_min, 2),
                     "costo": round(costo, 2),
                     "puntos_ruta": puntos_ruta,
                     "instrucciones": instrucciones,
                     "exito": True
                 }
-            
+
             time.sleep(1)
         except Exception as e:
             print(f"Intento {intento+1} falló: {e}")
             time.sleep(1)
-    
+
     return {"exito": False, "error": "No se pudo calcular la ruta"}
 
-def construir_matriz_osrm(puntos):
-    """Construye la matriz de distancias y tiempos usando OSRM."""
-    ids = list(puntos.keys())
-    n = len(ids)
-    
-    if n <= 25:
-        coordenadas = ";".join(
-            f"{puntos[nodo]['lng']},{puntos[nodo]['lat']}"
-            for nodo in ids
+
+def peso_arista_fallback(lat1, lng1, lat2, lng2):
+    """Si OSRM falla para una arista puntual, se usa Haversine como
+    respaldo (misma lógica que ya existía para la matriz aproximada)."""
+    dist_km = distancia_haversine(lat1, lng1, lat2, lng2)
+    tiempo_min = (dist_km / 40) * 60
+    costo = dist_km * COSTO_POR_KM
+    return round(dist_km, 2), round(tiempo_min, 2), round(costo, 2)
+
+
+def construir_grafo_hub(puntos):
+    """Construye el grafo SOLO con las aristas de la topología
+    atractivo<->hub y hub<->hub (ver edges_topologia), consultando a
+    OSRM el costo real de cada arista. Como el número de aristas es
+    pequeño (~39, en vez de las ~812 de un grafo completo con 29
+    nodos), no hace falta el servicio de matriz de OSRM ni su límite
+    de tamaño: se pide la ruta punto a punto de cada arista."""
+    grafo = {nodo: {} for nodo in puntos}
+
+    for a, b in edges_topologia():
+        if a not in puntos or b not in puntos:
+            continue
+
+        resultado = obtener_ruta_osrm(
+            puntos[a]["lat"], puntos[a]["lng"],
+            puntos[b]["lat"], puntos[b]["lng"]
         )
-        
-        url = f"{OSRM_URL}/table/v1/driving/{coordenadas}"
-        params = {"annotations": "duration,distance"}
-        
-        try:
-            respuesta = requests.get(url, params=params, timeout=60)
-            data = respuesta.json()
-            
-            if respuesta.status_code == 200 and data.get("code") == "Ok":
-                matriz_distancia = data["distances"]
-                matriz_tiempo = data["durations"]
-                
-                for i in range(n):
-                    for j in range(n):
-                        if i != j:
-                            if matriz_distancia[i][j] is None or matriz_distancia[i][j] == 0:
-                                dist = distancia_haversine(
-                                    puntos[ids[i]]["lat"], puntos[ids[i]]["lng"],
-                                    puntos[ids[j]]["lat"], puntos[ids[j]]["lng"]
-                                )
-                                matriz_distancia[i][j] = dist * 1000
-                                matriz_tiempo[i][j] = (dist / 40) * 3600
-                
-                return ids, matriz_distancia, matriz_tiempo
-        except Exception as e:
-            print("Error en matriz OSRM:", e)
-    
-    return construir_matriz_aproximada(puntos)
 
-def construir_matriz_aproximada(puntos):
-    """Construye una matriz aproximada usando distancia Haversine."""
-    ids = list(puntos.keys())
-    n = len(ids)
-    
-    matriz_distancia = [[0.0] * n for _ in range(n)]
-    matriz_tiempo = [[0.0] * n for _ in range(n)]
-    
-    for i in range(n):
-        for j in range(n):
-            if i != j:
-                dist = distancia_haversine(
-                    puntos[ids[i]]["lat"], puntos[ids[i]]["lng"],
-                    puntos[ids[j]]["lat"], puntos[ids[j]]["lng"]
-                )
-                matriz_distancia[i][j] = dist * 1000
-                matriz_tiempo[i][j] = (dist / 40) * 3600
-    
-    return ids, matriz_distancia, matriz_tiempo
+        if resultado.get("exito"):
+            distancia_km = resultado["distancia_km"]
+            tiempo_min = resultado["tiempo_min"]
+            costo = resultado["costo"]
+        else:
+            distancia_km, tiempo_min, costo = peso_arista_fallback(
+                puntos[a]["lat"], puntos[a]["lng"],
+                puntos[b]["lat"], puntos[b]["lng"]
+            )
 
-def construir_grafo(puntos):
-    """Construye el grafo de rutas entre todos los puntos."""
-    ids, matriz_distancia, matriz_tiempo = construir_matriz_osrm(puntos)
-    
-    if ids is None:
-        return {}
-    
-    grafo = {}
-    for i, nodo_origen in enumerate(ids):
-        grafo[nodo_origen] = {}
-        for j, nodo_destino in enumerate(ids):
-            if i == j:
-                continue
-            
-            distancia_metros = matriz_distancia[i][j]
-            tiempo_segundos = matriz_tiempo[i][j]
-            
-            if distancia_metros is None or tiempo_segundos is None:
-                continue
-            
-            distancia_km = distancia_metros / 1000
-            tiempo_min = tiempo_segundos / 60
-            costo = distancia_km * COSTO_POR_KM
-            
-            grafo[nodo_origen][nodo_destino] = {
-                "distancia_km": round(distancia_km, 2),
-                "tiempo_min": round(tiempo_min, 2),
-                "costo": round(costo, 2)
-            }
-    
+        datos_arista = {
+            "distancia_km": distancia_km,
+            "tiempo_min": tiempo_min,
+            "costo": costo
+        }
+
+        # No dirigido: se guarda en ambos sentidos con el mismo peso
+        grafo[a][b] = datos_arista
+        grafo[b][a] = datos_arista
+
     return grafo
 
 # ============================================================
@@ -454,22 +471,23 @@ PUNTOS_AJUSTADOS = {}
 def preparar_grafo():
     """Prepara el grafo con todos los puntos ajustados a la red vial."""
     global GRAFO, PUNTOS_AJUSTADOS
-    
+
     print("Preparando red vial...")
     PUNTOS_AJUSTADOS = ajustar_puntos_a_carreteras()
-    
-    print("Construyendo matriz de rutas...")
-    GRAFO = construir_grafo(PUNTOS_AJUSTADOS)
-    
-    print(f"Grafo construido con {len(GRAFO)} nodos.")
+
+    print("Construyendo grafo por hubs (atractivo<->hub, hub<->hub)...")
+    GRAFO = construir_grafo_hub(PUNTOS_AJUSTADOS)
+
+    print(f"Grafo construido con {len(GRAFO)} nodos y "
+          f"{sum(len(v) for v in GRAFO.values()) // 2} aristas.")
 
 def ajustar_puntos_a_carreteras():
     """Ajusta todos los puntos turísticos a la red vial."""
     puntos_ajustados = {}
-    
+
     for nodo_id, atractivo in ATRACTIVOS.items():
         resultado = obtener_punto_carretera(atractivo["lat"], atractivo["lng"])
-        
+
         if resultado["exito"]:
             puntos_ajustados[nodo_id] = {
                 **atractivo,
@@ -484,7 +502,7 @@ def ajustar_puntos_a_carreteras():
                 "lat_original": atractivo["lat"],
                 "lng_original": atractivo["lng"]
             }
-    
+
     return puntos_ajustados
 
 # ============================================================
@@ -498,52 +516,52 @@ def dijkstra(grafo, origen, destino, criterio):
         "tiempo": "tiempo_min",
         "costo": "costo"
     }
-    
+
     if criterio not in pesos:
         criterio = "tiempo"
-    
+
     campo_peso = pesos[criterio]
-    
+
     if origen not in grafo or destino not in grafo:
         return None
-    
+
     distancias = {nodo: float("inf") for nodo in grafo}
     anteriores = {nodo: None for nodo in grafo}
     distancias[origen] = 0
     cola_prioridad = [(0, origen)]
-    
+
     while cola_prioridad:
         distancia_actual, nodo_actual = heapq.heappop(cola_prioridad)
-        
+
         if distancia_actual > distancias[nodo_actual]:
             continue
-        
+
         if nodo_actual == destino:
             break
-        
+
         vecinos = grafo.get(nodo_actual, {})
         for vecino, datos in vecinos.items():
             peso = datos.get(campo_peso, 0)
             if peso <= 0:
                 continue
-            
+
             nueva_distancia = distancia_actual + peso
-            
+
             if nueva_distancia < distancias[vecino]:
                 distancias[vecino] = nueva_distancia
                 anteriores[vecino] = nodo_actual
                 heapq.heappush(cola_prioridad, (nueva_distancia, vecino))
-    
+
     if distancias.get(destino, float("inf")) == float("inf"):
         return None
-    
+
     camino = []
     nodo = destino
     while nodo is not None:
         camino.append(nodo)
         nodo = anteriores[nodo]
     camino.reverse()
-    
+
     return {
         "camino": camino,
         "peso_total": round(distancias[destino], 2),
@@ -554,7 +572,7 @@ def obtener_geometria_camino(camino):
     """Obtiene la geometría completa del camino con todos los puntos intermedios."""
     if not camino or len(camino) < 2:
         return []
-    
+
     puntos = []
     for nodo in camino:
         if nodo in PUNTOS_AJUSTADOS:
@@ -567,23 +585,23 @@ def obtener_geometria_camino(camino):
                 "lat": ATRACTIVOS[nodo]["lat"],
                 "lng": ATRACTIVOS[nodo]["lng"]
             })
-    
+
     if len(puntos) >= 2:
         coord_str = ";".join(f"{p['lng']},{p['lat']}" for p in puntos)
         url = f"{OSRM_URL}/route/v1/driving/{coord_str}"
         params = {"overview": "full", "geometries": "geojson", "steps": "true"}
-        
+
         try:
             respuesta = requests.get(url, params=params, timeout=60)
             data = respuesta.json()
-            
+
             if respuesta.status_code == 200 and data.get("code") == "Ok":
                 ruta = data["routes"][0]
                 geometria = ruta["geometry"]["coordinates"]
                 return [[coord[1], coord[0]] for coord in geometria]
         except Exception as e:
             print("Error obteniendo geometría:", e)
-        
+
         puntos_ruta = []
         for i in range(len(puntos) - 1):
             inicio = puntos[i]
@@ -595,9 +613,9 @@ def obtener_geometria_camino(camino):
                 lng = inicio["lng"] + (fin["lng"] - inicio["lng"]) * t
                 puntos_ruta.append([lat, lng])
             puntos_ruta.append([fin["lat"], fin["lng"]])
-        
+
         return puntos_ruta
-    
+
     return []
 
 # ============================================================
@@ -617,44 +635,44 @@ def api_ruta():
         origen = int(data["origen"])
         destino = int(data["destino"])
         criterio = data.get("criterio", "tiempo")
-        
+
         if origen not in ATRACTIVOS:
             return jsonify({"exito": False, "error": "El nodo de origen no existe."}), 400
-        
+
         if destino not in ATRACTIVOS:
             return jsonify({"exito": False, "error": "El nodo de destino no existe."}), 400
-        
+
         if origen == destino:
             return jsonify({"exito": False, "error": "El origen y destino no pueden ser iguales."}), 400
-        
+
         if not GRAFO:
             preparar_grafo()
-        
+
         resultado_dijkstra = dijkstra(GRAFO, origen, destino, criterio)
-        
+
         if resultado_dijkstra is None:
             return jsonify({
                 "exito": False,
                 "error": "No se encontró un camino entre los nodos seleccionados."
             }), 404
-        
+
         camino = resultado_dijkstra["camino"]
         puntos_ruta = obtener_geometria_camino(camino)
-        
+
         distancia_total = 0
         tiempo_total = 0
         costo_total = 0
         segmentos = []
-        
+
         for i in range(len(camino) - 1):
             nodo_a = camino[i]
             nodo_b = camino[i + 1]
             datos_segmento = GRAFO[nodo_a][nodo_b]
-            
+
             distancia_total += datos_segmento["distancia_km"]
             tiempo_total += datos_segmento["tiempo_min"]
             costo_total += datos_segmento["costo"]
-            
+
             segmentos.append({
                 "origen": nodo_a,
                 "destino": nodo_b,
@@ -662,7 +680,7 @@ def api_ruta():
                 "tiempo_min": datos_segmento["tiempo_min"],
                 "costo": datos_segmento["costo"]
             })
-        
+
         nodos_ruta = []
         for nodo in camino:
             nodos_ruta.append({
@@ -673,7 +691,7 @@ def api_ruta():
                 "lat_carretera": PUNTOS_AJUSTADOS[nodo]["lat"],
                 "lng_carretera": PUNTOS_AJUSTADOS[nodo]["lng"]
             })
-        
+
         return jsonify({
             "exito": True,
             "origen": origen,
@@ -688,7 +706,7 @@ def api_ruta():
             "segmentos": segmentos,
             "nodos_visitados": len(camino)
         })
-        
+
     except Exception as e:
         print("ERROR API RUTA:", e)
         return jsonify({"exito": False, "error": str(e)}), 500
@@ -698,7 +716,7 @@ def api_coordenadas():
     """API para obtener todas las coordenadas de los atractivos."""
     if not PUNTOS_AJUSTADOS:
         preparar_grafo()
-    
+
     resultado = {}
     for nodo, datos in PUNTOS_AJUSTADOS.items():
         resultado[nodo] = {
@@ -712,7 +730,7 @@ def api_coordenadas():
             "lat_carretera": datos["lat"],
             "lng_carretera": datos["lng"]
         }
-    
+
     return jsonify(resultado)
 
 @app.route("/api/grafo")
@@ -744,10 +762,11 @@ if __name__ == "__main__":
     print("==========================================")
     print(" RUTAS TURÍSTICAS DE COCLÉ")
     print(" Optimización mediante Dijkstra")
+    print(" Grafo: atractivo<->hub, hub<->hub")
     print("==========================================")
     print(f"Atractivos registrados: {len(ATRACTIVOS)}")
     print("Servidor iniciado.")
-    
+
     app.run(
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 5000)),
