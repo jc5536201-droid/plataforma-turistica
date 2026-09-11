@@ -16,13 +16,22 @@ COSTO_POR_KM = 0.15
 TIMEOUT = 30
 MAX_RETRIES = 3
 
+# ------------------------------------------------------------
+# FUENTE DE COORDENADAS
+#   "google" -> coordenadas tomadas de Google Maps (por defecto)
+#   "osm"    -> coordenadas tomadas de OpenStreetMap / OSRM
+# Se puede cambiar sin tocar el código con la variable de entorno:
+#   export FUENTE_COORDENADAS=osm
+# ------------------------------------------------------------
+FUENTE_COORDENADAS = os.environ.get("FUENTE_COORDENADAS", "google").lower()
+
 # ============================================================
-# ATRACTIVOS TURÍSTICOS - COORDENADAS CORREGIDAS
+# ATRACTIVOS TURÍSTICOS - COORDENADAS DESDE GOOGLE MAPS
 # ============================================================
 
-ATRACTIVOS = {
+ATRACTIVOS_GOOGLE = {
     # ========== PLAYAS (Costa del Pacífico) ==========
-      1: {
+    1: {
         "nombre": "Playa Santa Clara",
         "cod": "PSC",
         "tipo": "Playa",
@@ -34,7 +43,7 @@ ATRACTIVOS = {
         "nombre": "Playa Farallón",
         "cod": "PFA",
         "tipo": "Playa",
-        "lat": 8.3613, 
+        "lat": 8.3613,
         "lng": -80.12977,
         "descripcion": "Playa con olas moderadas y arena dorada"
     },
@@ -42,7 +51,7 @@ ATRACTIVOS = {
         "nombre": "Playa El Salado",
         "cod": "PES",
         "tipo": "Playa",
-        "lat": 8.20159, 
+        "lat": 8.20159,
         "lng": -80.48353,
         "descripcion": "Playa tranquila cerca de Aguadulce"
     },
@@ -50,7 +59,7 @@ ATRACTIVOS = {
         "nombre": "Playa Blanca",
         "cod": "PBL",
         "tipo": "Playa",
-        "lat": 8.34595, 
+        "lat": 8.34595,
         "lng": -80.15175,
         "descripcion": "Hermosa playa de arena blanca"
     },
@@ -58,8 +67,8 @@ ATRACTIVOS = {
         "nombre": "Playa Juan Hombrón",
         "cod": "PJH",
         "tipo": "Playa",
-        "lat":  8.29827,
-        "lng": -80.25338, 
+        "lat": 8.29827,
+        "lng": -80.25338,
         "descripcion": "Playa con aguas cristalinas"
     },
 
@@ -67,8 +76,8 @@ ATRACTIVOS = {
     6: {
         "nombre": "Mercado Artesanía Valle Antón",
         "cod": "MAV",
-        "tipo": "Cultural", 
-        "lat":  8.60408, 
+        "tipo": "Cultural",
+        "lat": 8.60408,
         "lng": -80.13115,
         "descripcion": "Mercado de artesanías típicas"
     },
@@ -76,15 +85,15 @@ ATRACTIVOS = {
         "nombre": "Serpentario Maravillas Tropicales",
         "cod": "SMT",
         "tipo": "Naturaleza",
-        "lat": 8.60162, 
-        "lng": -80.11503, 
+        "lat": 8.60162,
+        "lng": -80.11503,
         "descripcion": "Exhibición de serpientes y reptiles"
     },
     8: {
         "nombre": "Museo Hermanos Arias Madrid",
         "cod": "MHA",
         "tipo": "Cultural/Hist.",
-        "lat": 8.52497, 
+        "lat": 8.52497,
         "lng": -80.35677,
         "descripcion": "Museo histórico en Penonomé"
     },
@@ -93,40 +102,40 @@ ATRACTIVOS = {
         "cod": "PNT",
         "tipo": "Parque Nacional",
         "lat": 8.68788,
-        "lng": -80.64378,  
+        "lng": -80.64378,
         "descripcion": "Parque Nacional con senderos ecológicos"
     },
     10: {
         "nombre": "Sitio Arqueológico El Caño",
         "cod": "SAC",
-        "tipo": "Arqueológico", 
+        "tipo": "Arqueológico",
         "lat": 8.3967,
         "lng": -80.50148,
         "descripcion": "Importante sitio arqueológico precolombino"
     },
 
-    # ========== MUSEOS Y SITIOS HISTÓRICOS (CORREGIDOS) ==========
+    # ========== MUSEOS Y SITIOS HISTÓRICOS ==========
     11: {
         "nombre": "Museo Regional Stella Sierra",
         "cod": "MSS",
         "tipo": "Cultural/Hist.",
-        "lat": 8.24104,  # CORREGIDO - Está en Aguadulce
-        "lng": -80.5398,   
+        "lat": 8.24104,
+        "lng": -80.5398,
         "descripcion": "Museo regional en Aguadulce"
     },
     12: {
         "nombre": "Iglesia San Juan Bautista",
         "cod": "ISJ",
         "tipo": "Histórico",
-        "lat": 8.52188, 
+        "lat": 8.52188,
         "lng": -80.35936,
-        "descripcion": "Iglesia histórica en Penonomé"    
+        "descripcion": "Iglesia histórica en Penonomé"
     },
     13: {
         "nombre": "El Chorro Las Yayas",
         "cod": "CLY",
         "tipo": "Cascada",
-        "lat": 8.64588,  
+        "lat": 8.64588,
         "lng": -80.58997,
         "descripcion": "Hermosa cascada en La Pintada"
     },
@@ -134,17 +143,17 @@ ATRACTIVOS = {
         "nombre": "Balneario Las Mendozas",
         "cod": "BLM",
         "tipo": "Balneario",
-        "lat": 8.52654,  
+        "lat": 8.52654,
         "lng": -80.35536,
         "descripcion": "Balneario natural cerca de Penonomé"
     },
 
-    # ========== CIUDADES Y PUEBLOS (CORREGIDOS) ==========
+    # ========== CIUDADES Y PUEBLOS ==========
     15: {
         "nombre": "Penonomé",
         "cod": "PEN",
         "tipo": "Hub/Ciudad",
-        "lat": 8.55029,  
+        "lat": 8.55029,
         "lng": -80.35474,
         "descripcion": "Capital de la provincia de Coclé"
     },
@@ -152,15 +161,15 @@ ATRACTIVOS = {
         "nombre": "Aguadulce",
         "cod": "AGU",
         "tipo": "Hub/Ciudad",
-        "lat": 8.23017,  # CORREGIDO - Ubicación correcta de Aguadulce  
-        "lng": -80.55495,   
+        "lat": 8.23017,
+        "lng": -80.55495,
         "descripcion": "Ciudad conocida por sus salinas"
     },
     17: {
         "nombre": "Antón",
         "cod": "ANT",
         "tipo": "Hub/Ciudad",
-        "lat": 8.40186,  
+        "lat": 8.40186,
         "lng": -80.27115,
         "descripcion": "Ciudad cerca de las playas"
     },
@@ -168,7 +177,7 @@ ATRACTIVOS = {
         "nombre": "La Pintada",
         "cod": "LAP",
         "tipo": "Hub/Ciudad",
-        "lat":  8.59331,  # CORREGIDO  
+        "lat": 8.59331,
         "lng": -80.44655,
         "descripcion": "Ciudad conocida por sus artesanías"
     },
@@ -176,17 +185,17 @@ ATRACTIVOS = {
         "nombre": "Natá",
         "cod": "NAT",
         "tipo": "Hub/Ciudad",
-        "lat": 8.30297,  # CORREGIDO  
+        "lat": 8.30297,
         "lng": -80.43265,
         "descripcion": "Ciudad histórica con iglesia colonial"
     },
 
-    # ========== SITIOS RELIGIOSOS Y CULTURALES (CORREGIDOS) ==========
+    # ========== SITIOS RELIGIOSOS Y CULTURALES ==========
     20: {
         "nombre": "Parroquia Ntra. Sra. Candelaria",
         "cod": "PNC",
         "tipo": "Histórico",
-        "lat": 8.59308,  # CORREGIDO - Está en La Pintada  
+        "lat": 8.59308,
         "lng": -80.44582,
         "descripcion": "Iglesia histórica en La Pintada"
     },
@@ -194,7 +203,7 @@ ATRACTIVOS = {
         "nombre": "Cerro Gaital",
         "cod": "CGA",
         "tipo": "Montaña",
-        "lat": 8.61666,   
+        "lat": 8.61666,
         "lng": -80.11666,
         "descripcion": "Cerro con vista panorámica"
     },
@@ -202,7 +211,7 @@ ATRACTIVOS = {
         "nombre": "Museo de Penonomé",
         "cod": "MPE",
         "tipo": "Cultural",
-        "lat": 8.51959,  
+        "lat": 8.51959,
         "lng": -80.36056,
         "descripcion": "Museo histórico en Penonomé"
     },
@@ -210,7 +219,7 @@ ATRACTIVOS = {
         "nombre": "Mercado Artesanías La Pintada",
         "cod": "MLA",
         "tipo": "Cultural",
-        "lat": 8.59702,  # CORREGIDO 
+        "lat": 8.59702,
         "lng": -80.44881,
         "descripcion": "Mercado de artesanías en La Pintada"
     },
@@ -218,7 +227,7 @@ ATRACTIVOS = {
         "nombre": "Balneario Los Algarrobos",
         "cod": "BAL",
         "tipo": "Naturaleza",
-        "lat": 8.59377,  # CORREGIDO 
+        "lat": 8.59377,
         "lng": -80.44295,
         "descripcion": "Balneario natural cerca de La Pintada"
     },
@@ -226,7 +235,7 @@ ATRACTIVOS = {
         "nombre": "Iglesia Santiago Apóstol",
         "cod": "ISA",
         "tipo": "Histórico",
-        "lat":  8.33215, 
+        "lat": 8.33215,
         "lng": -80.51524,
         "descripcion": "Iglesia colonial en Natá"
     },
@@ -234,7 +243,7 @@ ATRACTIVOS = {
         "nombre": "Ecoparque Don Arcelio",
         "cod": "ECO",
         "tipo": "Naturaleza",
-        "lat":  8.38084, 
+        "lat": 8.38084,
         "lng": -80.5289,
         "descripcion": "Parque ecológico cerca de Natá"
     },
@@ -242,60 +251,297 @@ ATRACTIVOS = {
         "nombre": "Salinas de Aguadulce",
         "cod": "SAL",
         "tipo": "Naturaleza",
-        "lat": 8.20203,  # CORREGIDO - Cerca de Aguadulce 
-        "lng":  -80.4962,
+        "lat": 8.20203,
+        "lng": -80.4962,
         "descripcion": "Salinas tradicionales"
     },
     28: {
         "nombre": "Mariposario",
         "cod": "MAR",
         "tipo": "Naturaleza",
-        "lat": 8.60141, 
-        "lng": -80.12923, 
+        "lat": 8.60141,
+        "lng": -80.12923,
         "descripcion": "Jardín de mariposas"
     },
     29: {
         "nombre": "Canopy Adventure",
         "cod": "CAN",
         "tipo": "Aventura",
-        "lat": 8.62585,  
-        "lng": -80.1387,   
+        "lat": 8.62585,
+        "lng": -80.1387,
         "descripcion": "Tirolesa y aventura en la selva"
     }
 }
 
 # ============================================================
-# TOPOLOGÍA DEL GRAFO (NUEVO)
-#
-# Antes el grafo conectaba TODOS los atractivos entre sí (grafo
-# completo). Con pesos euclidianos, eso hace que la desigualdad
-# triangular se cumpla siempre en forma estricta, así que Dijkstra
-# terminaba devolviendo SIEMPRE el arco directo origen->destino,
-# sin pasar nunca por un nodo intermedio.
-#
-# Ahora el grafo modela la red vial real de Coclé como una
-# topología de "estrellas conectadas por un anillo de hubs":
-#   - Cada atractivo se conecta SOLO con su hub/ciudad más cercano
-#     (la carretera real que lo comunica con el resto de la red).
-#   - Los 5 hubs (Penonomé, Aguadulce, Antón, La Pintada, Natá) se
-#     conectan entre sí, porque son los que están sobre las vías
-#     principales (Interamericana y carreteras secundarias).
-#
-# Con esto, ir de un atractivo a otro que no comparte hub obliga a
-# Dijkstra a atravesar uno o más hubs intermedios, que es lo que se
-# espera demostrar en una tesis sobre diseño de rutas óptimas.
+# ATRACTIVOS TURÍSTICOS - COORDENADAS DESDE OPENSTREETMAP / OSRM
+# ============================================================
+
+ATRACTIVOS_OSM = {
+    # ========== PLAYAS (Costa del Pacífico) ==========
+    1: {
+        "nombre": "Playa Santa Clara",
+        "cod": "PSC",
+        "tipo": "Playa",
+        "lat": 8.37571,
+        "lng": -80.10372,
+        "descripcion": "Playa de arena blanca y aguas tranquilas"
+    },
+    2: {
+        "nombre": "Playa Farallón",
+        "cod": "PFA",
+        "tipo": "Playa",
+        "lat": 8.35894,
+        "lng": -80.13333,
+        "descripcion": "Playa con olas moderadas y arena dorada"
+    },
+    3: {
+        "nombre": "Playa El Salado",
+        "cod": "PES",
+        "tipo": "Playa",
+        "lat": 8.202045,
+        "lng": -80.483697,
+        "descripcion": "Playa tranquila cerca de Aguadulce"
+    },
+    4: {
+        "nombre": "Playa Blanca",
+        "cod": "PBL",
+        "tipo": "Playa",
+        "lat": 8.34490,
+        "lng": -80.15400,
+        "descripcion": "Hermosa playa de arena blanca"
+    },
+    5: {
+        "nombre": "Playa Juan Hombrón",
+        "cod": "PJH",
+        "tipo": "Playa",
+        "lat": 8.319702725314118,
+        "lng": -80.205259322496,
+        "descripcion": "Playa con aguas cristalinas"
+    },
+
+    # ========== CULTURA Y ARTE ==========
+    6: {
+        "nombre": "Mercado Artesanía Valle Antón",
+        "cod": "MAV",
+        "tipo": "Cultural",
+        "lat": 8.604108,
+        "lng": -80.131198,
+        "descripcion": "Mercado de artesanías típicas"
+    },
+    7: {
+        "nombre": "Serpentario Maravillas Tropicales",
+        "cod": "SMT",
+        "tipo": "Naturaleza",
+        "lat": 8.6011942,
+        "lng": -80.1152153,
+        "descripcion": "Exhibición de serpientes y reptiles"
+    },
+    8: {
+        "nombre": "Museo Hermanos Arias Madrid",
+        "cod": "MHA",
+        "tipo": "Cultural/Hist.",
+        "lat": 8.525075,
+        "lng": -80.356665,
+        "descripcion": "Museo histórico en Penonomé"
+    },
+    9: {
+        "nombre": "P.N. Omar Torrijos",
+        "cod": "PNT",
+        "tipo": "Parque Nacional",
+        "lat": 8.6554,
+        "lng": -80.7008,
+        "descripcion": "Parque Nacional con senderos ecológicos"
+    },
+    10: {
+        "nombre": "Sitio Arqueológico El Caño",
+        "cod": "SAC",
+        "tipo": "Arqueológico",
+        "lat": 8.396716,
+        "lng": -80.501499,
+        "descripcion": "Importante sitio arqueológico precolombino"
+    },
+
+    # ========== MUSEOS Y SITIOS HISTÓRICOS ==========
+    11: {
+        "nombre": "Museo Regional Stella Sierra",
+        "cod": "MSS",
+        "tipo": "Cultural/Hist.",
+        "lat": 8.241049,
+        "lng": -80.539833,
+        "descripcion": "Museo regional en Aguadulce"
+    },
+    12: {
+        "nombre": "Iglesia San Juan Bautista",
+        "cod": "ISJ",
+        "tipo": "Histórico",
+        "lat": 8.521929,
+        "lng": -80.359489,
+        "descripcion": "Iglesia histórica en Penonomé"
+    },
+    13: {
+        "nombre": "El Chorro Las Yayas",
+        "cod": "CLY",
+        "tipo": "Cascada",
+        "lat": 8.645952,
+        "lng": -80.590030,
+        "descripcion": "Hermosa cascada en La Pintada"
+    },
+    14: {
+        "nombre": "Balneario Las Mendozas",
+        "cod": "BLM",
+        "tipo": "Balneario",
+        "lat": 8.526422,
+        "lng": -80.355455,
+        "descripcion": "Balneario natural cerca de Penonomé"
+    },
+
+    # ========== CIUDADES Y PUEBLOS ==========
+    15: {
+        "nombre": "Penonomé",
+        "cod": "PEN",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.5260,
+        "lng": -80.3616,
+        "descripcion": "Capital de la provincia de Coclé"
+    },
+    16: {
+        "nombre": "Aguadulce",
+        "cod": "AGU",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.24275,
+        "lng": -80.53888,
+        "descripcion": "Ciudad conocida por sus salinas"
+    },
+    17: {
+        "nombre": "Antón",
+        "cod": "ANT",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.3944820,
+        "lng": -80.2663470,
+        "descripcion": "Ciudad cerca de las playas"
+    },
+    18: {
+        "nombre": "La Pintada",
+        "cod": "LAP",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.5963,
+        "lng": -80.4467,
+        "descripcion": "Ciudad conocida por sus artesanías"
+    },
+    19: {
+        "nombre": "Natá",
+        "cod": "NAT",
+        "tipo": "Hub/Ciudad",
+        "lat": 8.33686,
+        "lng": -80.51725,
+        "descripcion": "Ciudad histórica con iglesia colonial"
+    },
+
+    # ========== SITIOS RELIGIOSOS Y CULTURALES ==========
+    20: {
+        "nombre": "Parroquia Ntra. Sra. Candelaria",
+        "cod": "PNC",
+        "tipo": "Histórico",
+        "lat": 8.593051,
+        "lng": -80.445811,
+        "descripcion": "Iglesia histórica en La Pintada"
+    },
+    21: {
+        "nombre": "Cerro Gaital",
+        "cod": "CGA",
+        "tipo": "Montaña",
+        "lat": 8.624607,
+        "lng": -80.123500,
+        "descripcion": "Cerro con vista panorámica"
+    },
+    22: {
+        "nombre": "Museo de Penonomé",
+        "cod": "MPE",
+        "tipo": "Cultural",
+        "lat": 8.519549,
+        "lng": -80.360597,
+        "descripcion": "Museo histórico en Penonomé"
+    },
+    23: {
+        "nombre": "Mercado Artesanías La Pintada",
+        "cod": "MLA",
+        "tipo": "Cultural",
+        "lat": 8.597083,
+        "lng": -80.448927,
+        "descripcion": "Mercado de artesanías en La Pintada"
+    },
+    24: {
+        "nombre": "Balneario Los Algarrobos",
+        "cod": "BAL",
+        "tipo": "Naturaleza",
+        "lat": 8.59850400964035,
+        "lng": -80.44361114252906,
+        "descripcion": "Balneario natural cerca de La Pintada"
+    },
+    25: {
+        "nombre": "Iglesia Santiago Apóstol",
+        "cod": "ISA",
+        "tipo": "Histórico",
+        "lat": 8.332057,
+        "lng": -80.515256,
+        "descripcion": "Iglesia colonial en Natá"
+    },
+    26: {
+        "nombre": "Ecoparque Don Arcelio",
+        "cod": "ECO",
+        "tipo": "Naturaleza",
+        "lat": 8.380838,
+        "lng": -80.528935,
+        "descripcion": "Parque ecológico cerca de Natá"
+    },
+    27: {
+        "nombre": "Salinas de Aguadulce",
+        "cod": "SAL",
+        "tipo": "Naturaleza",
+        "lat": 8.22279,
+        "lng": -80.49906,
+        "descripcion": "Salinas tradicionales"
+    },
+    28: {
+        "nombre": "Mariposario",
+        "cod": "MAR",
+        "tipo": "Naturaleza",
+        "lat": 8.600997663400143,
+        "lng": -80.12844476076745,
+        "descripcion": "Jardín de mariposas"
+    },
+    29: {
+        "nombre": "Canopy Adventure",
+        "cod": "CAN",
+        "tipo": "Aventura",
+        "lat": 8.625407314878048,
+        "lng": -80.13892822612566,
+        "descripcion": "Tirolesa y aventura en la selva"
+    }
+}
+
+# ============================================================
+# SELECCIÓN DE LA FUENTE DE COORDENADAS
+# ============================================================
+
+if FUENTE_COORDENADAS == "osm":
+    ATRACTIVOS = ATRACTIVOS_OSM
+    print(">>> Usando coordenadas de OpenStreetMap / OSRM")
+else:
+    ATRACTIVOS = ATRACTIVOS_GOOGLE
+    print(">>> Usando coordenadas de Google Maps")
+
+# ============================================================
+# TOPOLOGÍA DEL GRAFO
 # ============================================================
 
 HUBS = {15, 16, 17, 18, 19}
 
-# Atractivo -> hub más cercano (calculado por distancia real y
-# ajustado a la zona administrativa cuando hay ambigüedad, p. ej.
-# El Valle de Antón pertenece al distrito de Antón aunque en línea
-# recta quede casi igual de cerca de Penonomé).
 ASIGNACION_HUB = {
     # Penonomé (15)
     12: 15, 8: 15, 14: 15, 22: 15,
-    # Antón (17) — incluye playas y El Valle de Antón
+    # Antón (17)
     5: 17, 4: 17, 2: 17, 1: 17,
     6: 17, 7: 17, 21: 17, 28: 17, 29: 17,
     # Aguadulce (16)
@@ -308,8 +554,7 @@ ASIGNACION_HUB = {
 
 
 def edges_topologia():
-    """Genera la lista de aristas (no dirigidas) del grafo hub-radial:
-    atractivo<->su hub, y hub<->hub (malla completa entre los 5 hubs)."""
+    """Genera la lista de aristas del grafo hub-radial."""
     aristas = []
 
     for nodo, hub in ASIGNACION_HUB.items():
@@ -413,8 +658,7 @@ def obtener_ruta_osrm(origen_lat, origen_lng, destino_lat, destino_lng):
 
 
 def peso_arista_fallback(lat1, lng1, lat2, lng2):
-    """Si OSRM falla para una arista puntual, se usa Haversine como
-    respaldo (misma lógica que ya existía para la matriz aproximada)."""
+    """Si OSRM falla para una arista puntual, se usa Haversine como respaldo."""
     dist_km = distancia_haversine(lat1, lng1, lat2, lng2)
     tiempo_min = (dist_km / 40) * 60
     costo = dist_km * COSTO_POR_KM
@@ -423,11 +667,7 @@ def peso_arista_fallback(lat1, lng1, lat2, lng2):
 
 def construir_grafo_hub(puntos):
     """Construye el grafo SOLO con las aristas de la topología
-    atractivo<->hub y hub<->hub (ver edges_topologia), consultando a
-    OSRM el costo real de cada arista. Como el número de aristas es
-    pequeño (~39, en vez de las ~812 de un grafo completo con 29
-    nodos), no hace falta el servicio de matriz de OSRM ni su límite
-    de tamaño: se pide la ruta punto a punto de cada arista."""
+    atractivo<->hub y hub<->hub."""
     grafo = {nodo: {} for nodo in puntos}
 
     for a, b in edges_topologia():
@@ -455,7 +695,6 @@ def construir_grafo_hub(puntos):
             "costo": costo
         }
 
-        # No dirigido: se guarda en ambos sentidos con el mismo peso
         grafo[a][b] = datos_arista
         grafo[b][a] = datos_arista
 
@@ -765,6 +1004,7 @@ if __name__ == "__main__":
     print(" Grafo: atractivo<->hub, hub<->hub")
     print("==========================================")
     print(f"Atractivos registrados: {len(ATRACTIVOS)}")
+    print(f"Fuente de coordenadas: {FUENTE_COORDENADAS.upper()}")
     print("Servidor iniciado.")
 
     app.run(
