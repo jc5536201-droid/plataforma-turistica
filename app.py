@@ -76,7 +76,7 @@ ATRACTIVOS_GOOGLE = {
          "lat": 8.59331, "lng": -80.44655,
          "descripcion": "Ciudad conocida por sus artesanías"},
     19: {"nombre": "Natá", "cod": "NAT", "tipo": "Hub/Ciudad",
-         "lat": 8.30297, "lng": -80.43265,
+         "lat": 8.33220, "lng": -80.51420,
          "descripcion": "Ciudad histórica con iglesia colonial"},
     20: {"nombre": "Parroquia Ntra. Sra. Candelaria", "cod": "PNC", "tipo": "Histórico",
          "lat": 8.59308, "lng": -80.44582,
@@ -574,5 +574,30 @@ def api_fuente_post():
 
 
 if __name__ == "__main__":
+    print("==========================================")
+    print(" RUTAS TURÍSTICAS DE COCLÉ")
+    print(" Optimización mediante Dijkstra")
+    print(" Grafo: atractivo<->hub, hub<->hub")
+    print("==========================================")
+    print(f"Atractivos registrados: {len(ATRACTIVOS)}")
+    print(f"Fuente de coordenadas: {FUENTE_COORDENADAS.upper()}")
+    print(f"Factor de holgura de tiempo: {FACTOR_HOLGURA} (+{round((FACTOR_HOLGURA - 1) * 100)}%)")
+
+    # Se precalienta el grafo al iniciar, para que la primera petición de un
+    # usuario real no tenga que esperar a que se consulten ~34 aristas a OSRM.
+    # Si OSRM no responde al arrancar (por ejemplo, sin red), no se detiene el
+    # servidor: el grafo se construye de todos modos en la primera petición,
+    # vía asegurar_grafo_actualizado().
+    try:
+        print("Precalentando el grafo (puede tardar unos segundos)...")
+        preparar_grafo()
+        print(f"Grafo listo: {len(GRAFO)} nodos, "
+              f"{sum(len(v) for v in GRAFO.values()) // 2} aristas.")
+    except Exception as e:
+        print(f"No se pudo precalentar el grafo al iniciar ({e}). "
+              f"Se construirá en la primera petición.")
+
+    print("Servidor iniciado.")
+
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)),
             debug=os.environ.get("FLASK_DEBUG", "0") == "1")
