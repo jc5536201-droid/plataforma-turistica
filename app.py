@@ -16,18 +16,9 @@ COSTO_POR_KM = 0.15
 TIMEOUT = 30
 MAX_RETRIES = 3
 
-# Velocidad de referencia SOLO para el fallback Haversine (km/h)
 VELOCIDAD_FALLBACK_KMH = 40
 
-# Factor de holgura aplicado al TIEMPO de conducción estimado por OSRM.
-# 1.00 = sin holgura; 1.25 = +25% (valor por defecto recomendado para
-# reflejar tráfico, clima, maniobras y estado del camino no modelados
-# por OSRM en el servidor público).
 FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.25"))
-
-# ============================================================
-# ATRACTIVOS TURÍSTICOS - COORDENADAS DESDE GOOGLE MAPS
-# ============================================================
 
 ATRACTIVOS_GOOGLE = {
     1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa",
@@ -45,7 +36,6 @@ ATRACTIVOS_GOOGLE = {
     5: {"nombre": "Playa Juan Hombrón", "cod": "PJH", "tipo": "Playa",
         "lat": 8.29827, "lng": -80.25338,
         "descripcion": "Playa con aguas cristalinas"},
-
     6: {"nombre": "Mercado Artesanía Valle Antón", "cod": "MAV", "tipo": "Cultural",
         "lat": 8.60408, "lng": -80.13115,
         "descripcion": "Mercado de artesanías típicas"},
@@ -61,7 +51,6 @@ ATRACTIVOS_GOOGLE = {
     10: {"nombre": "Sitio Arqueológico El Caño", "cod": "SAC", "tipo": "Arqueológico",
          "lat": 8.3967, "lng": -80.50148,
          "descripcion": "Importante sitio arqueológico precolombino"},
-
     11: {"nombre": "Museo Regional Stella Sierra", "cod": "MSS", "tipo": "Cultural/Hist.",
          "lat": 8.24104, "lng": -80.5398,
          "descripcion": "Museo regional en Aguadulce"},
@@ -74,7 +63,6 @@ ATRACTIVOS_GOOGLE = {
     14: {"nombre": "Balneario Las Mendozas", "cod": "BLM", "tipo": "Balneario",
          "lat": 8.52654, "lng": -80.35536,
          "descripcion": "Balneario natural cerca de Penonomé"},
-
     15: {"nombre": "Penonomé", "cod": "PEN", "tipo": "Hub/Ciudad",
          "lat": 8.55029, "lng": -80.35474,
          "descripcion": "Capital de la provincia de Coclé"},
@@ -90,7 +78,6 @@ ATRACTIVOS_GOOGLE = {
     19: {"nombre": "Natá", "cod": "NAT", "tipo": "Hub/Ciudad",
          "lat": 8.30297, "lng": -80.43265,
          "descripcion": "Ciudad histórica con iglesia colonial"},
-
     20: {"nombre": "Parroquia Ntra. Sra. Candelaria", "cod": "PNC", "tipo": "Histórico",
          "lat": 8.59308, "lng": -80.44582,
          "descripcion": "Iglesia histórica en La Pintada"},
@@ -122,10 +109,6 @@ ATRACTIVOS_GOOGLE = {
          "lat": 8.62585, "lng": -80.1387,
          "descripcion": "Tirolesa y aventura en la selva"}
 }
-
-# ============================================================
-# ATRACTIVOS TURÍSTICOS - COORDENADAS DESDE OPENSTREETMAP / OSRM
-# ============================================================
 
 ATRACTIVOS_OSM = {
     1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa",
@@ -217,10 +200,6 @@ ATRACTIVOS_OSM = {
          "descripcion": "Tirolesa y aventura en la selva"}
 }
 
-# ============================================================
-# SELECCIÓN DINÁMICA DE FUENTE DE COORDENADAS
-# ============================================================
-
 FUENTE_COORDENADAS = os.environ.get("FUENTE_COORDENADAS", "google").lower()
 if FUENTE_COORDENADAS not in ("google", "osm"):
     FUENTE_COORDENADAS = "google"
@@ -233,14 +212,6 @@ def obtener_atractivos_por_fuente(fuente):
 
 
 ATRACTIVOS = obtener_atractivos_por_fuente(FUENTE_COORDENADAS)
-print(f">>> Usando coordenadas de "
-      f"{'OpenStreetMap / OSRM' if FUENTE_COORDENADAS == 'osm' else 'Google Maps'}")
-print(f">>> Factor de holgura de tiempo: {FACTOR_HOLGURA} "
-      f"(+{round((FACTOR_HOLGURA - 1) * 100)}%)")
-
-# ============================================================
-# TOPOLOGÍA DEL GRAFO
-# ============================================================
 
 HUBS = {15, 16, 17, 18, 19}
 
@@ -264,9 +235,6 @@ def edges_topologia():
             aristas.append((hubs_lista[i], hubs_lista[j]))
     return aristas
 
-# ============================================================
-# FUNCIONES AUXILIARES
-# ============================================================
 
 def distancia_haversine(lat1, lon1, lat2, lon2):
     radio_tierra = 6371.0
@@ -356,9 +324,6 @@ def construir_grafo_hub(puntos):
         grafo[b][a] = datos_arista
     return grafo
 
-# ============================================================
-# PREPARAR GRAFO
-# ============================================================
 
 GRAFO = {}
 PUNTOS_AJUSTADOS = {}
@@ -367,13 +332,9 @@ FUENTE_GRAFO = None
 
 def preparar_grafo():
     global GRAFO, PUNTOS_AJUSTADOS, FUENTE_GRAFO
-    print(f"Preparando red vial (fuente: {FUENTE_COORDENADAS})...")
     PUNTOS_AJUSTADOS = ajustar_puntos_a_carreteras()
-    print("Construyendo grafo por hubs (atractivo<->hub, hub<->hub)...")
     GRAFO = construir_grafo_hub(PUNTOS_AJUSTADOS)
     FUENTE_GRAFO = FUENTE_COORDENADAS
-    print(f"Grafo construido con {len(GRAFO)} nodos y "
-          f"{sum(len(v) for v in GRAFO.values()) // 2} aristas.")
 
 
 def asegurar_grafo_actualizado():
@@ -401,9 +362,6 @@ def ajustar_puntos_a_carreteras():
             }
     return puntos_ajustados
 
-# ============================================================
-# DIJKSTRA
-# ============================================================
 
 def dijkstra(grafo, origen, destino, criterio):
     pesos = {"distancia": "distancia_km", "tiempo": "tiempo_min", "costo": "costo"}
@@ -442,48 +400,23 @@ def dijkstra(grafo, origen, destino, criterio):
     camino.reverse()
     return {"camino": camino, "peso_total": distancias[destino], "criterio": criterio}
 
-# ============================================================
-# MÉTRICAS OFICIALES DEL CAMINO COMPLETO
-# ============================================================
 
 def obtener_metricas_camino_completo(camino):
     if not camino or len(camino) < 2:
-        return {
-            "puntos_ruta": [],
-            "distancia_km": 0.0,
-            "tiempo_conduccion_min": 0.0,
-            "costo": 0.0,
-            "fuente": "vacio",
-            "exito": False
-        }
-
+        return {"puntos_ruta": [], "distancia_km": 0.0, "tiempo_conduccion_min": 0.0,
+                "costo": 0.0, "fuente": "vacio", "exito": False}
     puntos = []
     for nodo in camino:
         if nodo in PUNTOS_AJUSTADOS:
-            puntos.append({
-                "lat": PUNTOS_AJUSTADOS[nodo]["lat"],
-                "lng": PUNTOS_AJUSTADOS[nodo]["lng"]
-            })
+            puntos.append({"lat": PUNTOS_AJUSTADOS[nodo]["lat"], "lng": PUNTOS_AJUSTADOS[nodo]["lng"]})
         elif nodo in ATRACTIVOS:
-            puntos.append({
-                "lat": ATRACTIVOS[nodo]["lat"],
-                "lng": ATRACTIVOS[nodo]["lng"]
-            })
-
+            puntos.append({"lat": ATRACTIVOS[nodo]["lat"], "lng": ATRACTIVOS[nodo]["lng"]})
     if len(puntos) < 2:
-        return {
-            "puntos_ruta": [],
-            "distancia_km": 0.0,
-            "tiempo_conduccion_min": 0.0,
-            "costo": 0.0,
-            "fuente": "vacio",
-            "exito": False
-        }
-
+        return {"puntos_ruta": [], "distancia_km": 0.0, "tiempo_conduccion_min": 0.0,
+                "costo": 0.0, "fuente": "vacio", "exito": False}
     coord_str = ";".join(f"{p['lng']},{p['lat']}" for p in puntos)
     url = f"{OSRM_URL}/route/v1/driving/{coord_str}"
     params = {"overview": "full", "geometries": "geojson", "steps": "false"}
-
     for intento in range(MAX_RETRIES):
         try:
             respuesta = requests.get(url, params=params, timeout=60)
@@ -493,20 +426,13 @@ def obtener_metricas_camino_completo(camino):
                 dist = ruta["distance"] / 1000.0
                 tmin = ruta["duration"] / 60.0
                 geometria = ruta["geometry"]["coordinates"]
-                return {
-                    "puntos_ruta": [[c[1], c[0]] for c in geometria],
-                    "distancia_km": dist,
-                    "tiempo_conduccion_min": tmin,
-                    "costo": dist * COSTO_POR_KM,
-                    "fuente": "osrm",
-                    "exito": True
-                }
+                return {"puntos_ruta": [[c[1], c[0]] for c in geometria], "distancia_km": dist,
+                        "tiempo_conduccion_min": tmin, "costo": dist * COSTO_POR_KM,
+                        "fuente": "osrm", "exito": True}
             time.sleep(1)
         except Exception as e:
             print(f"Intento {intento+1} falló (camino completo): {e}")
             time.sleep(1)
-
-    # Fallback Haversine
     dist_total = 0.0
     puntos_ruta = []
     for i in range(len(puntos) - 1):
@@ -516,20 +442,10 @@ def obtener_metricas_camino_completo(camino):
         if i == 0:
             puntos_ruta.append([a["lat"], a["lng"]])
         puntos_ruta.append([b["lat"], b["lng"]])
-
     tmin = (dist_total / VELOCIDAD_FALLBACK_KMH) * 60
-    return {
-        "puntos_ruta": puntos_ruta,
-        "distancia_km": dist_total,
-        "tiempo_conduccion_min": tmin,
-        "costo": dist_total * COSTO_POR_KM,
-        "fuente": "haversine",
-        "exito": False
-    }
+    return {"puntos_ruta": puntos_ruta, "distancia_km": dist_total, "tiempo_conduccion_min": tmin,
+            "costo": dist_total * COSTO_POR_KM, "fuente": "haversine", "exito": False}
 
-# ============================================================
-# RUTAS DE LA API
-# ============================================================
 
 @app.route("/")
 def index():
@@ -543,74 +459,46 @@ def api_ruta():
         origen = int(data["origen"])
         destino = int(data["destino"])
         criterio = data.get("criterio", "tiempo")
-
         if origen not in ATRACTIVOS:
             return jsonify({"exito": False, "error": "El nodo de origen no existe."}), 400
         if destino not in ATRACTIVOS:
             return jsonify({"exito": False, "error": "El nodo de destino no existe."}), 400
         if origen == destino:
             return jsonify({"exito": False, "error": "El origen y destino no pueden ser iguales."}), 400
-
         asegurar_grafo_actualizado()
-
         resultado_dijkstra = dijkstra(GRAFO, origen, destino, criterio)
         if resultado_dijkstra is None:
-            return jsonify({"exito": False,
-                            "error": "No se encontró un camino entre los nodos seleccionados."}), 404
-
+            return jsonify({"exito": False, "error": "No se encontró un camino entre los nodos seleccionados."}), 404
         camino = resultado_dijkstra["camino"]
-
         metricas = obtener_metricas_camino_completo(camino)
         puntos_ruta = metricas["puntos_ruta"]
         distancia_total = metricas["distancia_km"]
         tiempo_conduccion = metricas["tiempo_conduccion_min"]
         costo_total = metricas["costo"]
-
-        # Aplicar factor de holgura SOLO al tiempo
         tiempo_total = tiempo_conduccion * FACTOR_HOLGURA
-
-        # Segmentos del grafo (informativos, SIN holgura)
         segmentos = []
         for i in range(len(camino) - 1):
             a = camino[i]
             b = camino[i + 1]
             d = GRAFO[a][b]
-            segmentos.append({
-                "origen": a,
-                "destino": b,
-                "distancia_km": round(d["distancia_km"], 2),
-                "tiempo_min": round(d["tiempo_min"], 2),
-                "costo": round(d["costo"], 2)
-            })
-
+            segmentos.append({"origen": a, "destino": b,
+                               "distancia_km": round(d["distancia_km"], 2),
+                               "tiempo_min": round(d["tiempo_min"], 2),
+                               "costo": round(d["costo"], 2)})
         nodos_ruta = []
         for nodo in camino:
             nodos_ruta.append({
-                "id": nodo,
-                **ATRACTIVOS[nodo],
-                "lat_ruta": PUNTOS_AJUSTADOS[nodo]["lat"],
-                "lng_ruta": PUNTOS_AJUSTADOS[nodo]["lng"],
-                "lat_carretera": PUNTOS_AJUSTADOS[nodo]["lat"],
-                "lng_carretera": PUNTOS_AJUSTADOS[nodo]["lng"]
+                "id": nodo, **ATRACTIVOS[nodo],
+                "lat_ruta": PUNTOS_AJUSTADOS[nodo]["lat"], "lng_ruta": PUNTOS_AJUSTADOS[nodo]["lng"],
+                "lat_carretera": PUNTOS_AJUSTADOS[nodo]["lat"], "lng_carretera": PUNTOS_AJUSTADOS[nodo]["lng"]
             })
-
         return jsonify({
-            "exito": True,
-            "origen": origen,
-            "destino": destino,
-            "criterio": criterio,
-            "camino": camino,
-            "nodos_ruta": nodos_ruta,
-            "distancia_km": round(distancia_total, 2),
-            # Tiempo de conducción OSRM (sin holgura) y tiempo final (con holgura)
-            "tiempo_conduccion_min": round(tiempo_conduccion, 2),
-            "tiempo_min": round(tiempo_total, 2),
-            "factor_holgura": FACTOR_HOLGURA,
-            "costo": round(costo_total, 2),
-            "fuente_metricas": metricas["fuente"],
-            "puntos_ruta": puntos_ruta,
-            "segmentos": segmentos,
-            "nodos_visitados": len(camino)
+            "exito": True, "origen": origen, "destino": destino, "criterio": criterio,
+            "camino": camino, "nodos_ruta": nodos_ruta, "distancia_km": round(distancia_total, 2),
+            "tiempo_conduccion_min": round(tiempo_conduccion, 2), "tiempo_min": round(tiempo_total, 2),
+            "factor_holgura": FACTOR_HOLGURA, "costo": round(costo_total, 2),
+            "fuente_metricas": metricas["fuente"], "puntos_ruta": puntos_ruta,
+            "segmentos": segmentos, "nodos_visitados": len(camino)
         })
     except Exception as e:
         print("ERROR API RUTA:", e)
@@ -623,15 +511,10 @@ def api_coordenadas():
     resultado = {}
     for nodo, datos in PUNTOS_AJUSTADOS.items():
         resultado[nodo] = {
-            "nombre": datos["nombre"],
-            "cod": datos["cod"],
-            "tipo": datos["tipo"],
-            "lat": datos.get("lat_original", datos["lat"]),
-            "lng": datos.get("lng_original", datos["lng"]),
-            "lat_original": datos.get("lat_original", datos["lat"]),
-            "lng_original": datos.get("lng_original", datos["lng"]),
-            "lat_carretera": datos["lat"],
-            "lng_carretera": datos["lng"]
+            "nombre": datos["nombre"], "cod": datos["cod"], "tipo": datos["tipo"],
+            "lat": datos.get("lat_original", datos["lat"]), "lng": datos.get("lng_original", datos["lng"]),
+            "lat_original": datos.get("lat_original", datos["lat"]), "lng_original": datos.get("lng_original", datos["lng"]),
+            "lat_carretera": datos["lat"], "lng_carretera": datos["lng"]
         }
     return jsonify(resultado)
 
@@ -661,7 +544,7 @@ def api_fuente_get():
     return jsonify({
         "fuente": FUENTE_COORDENADAS,
         "fuente_nombre": "OpenStreetMap" if FUENTE_COORDENADAS == "osm" else "Google Maps",
-        "total_atractivos": len(ATTRACTIVOS),
+        "total_atractivos": len(ATRACTIVOS),
         "factor_holgura": FACTOR_HOLGURA
     })
 
@@ -672,52 +555,24 @@ def api_fuente_post():
     try:
         data = request.get_json() or {}
         nueva = str(data.get("fuente", "")).lower().strip()
-
         if nueva not in ("google", "osm"):
             return jsonify({"exito": False, "error": "Fuente inválida. Use 'google' u 'osm'."}), 400
-
         if nueva == FUENTE_COORDENADAS and GRAFO and FUENTE_GRAFO == nueva:
-            return jsonify({
-                "exito": True,
-                "fuente": FUENTE_COORDENADAS,
-                "mensaje": "La fuente ya estaba activa."
-            })
-
+            return jsonify({"exito": True, "fuente": FUENTE_COORDENADAS, "mensaje": "La fuente ya estaba activa."})
         FUENTE_COORDENADAS = nueva
         ATRACTIVOS = obtener_atractivos_por_fuente(nueva)
         GRAFO = {}
         PUNTOS_AJUSTADOS = {}
         FUENTE_GRAFO = None
-
         asegurar_grafo_actualizado()
-
-        return jsonify({
-            "exito": True,
-            "fuente": FUENTE_COORDENADAS,
-            "fuente_nombre": "OpenStreetMap" if FUENTE_COORDENADAS == "osm" else "Google Maps",
-            "total_atractivos": len(ATRACTIVOS)
-        })
+        return jsonify({"exito": True, "fuente": FUENTE_COORDENADAS,
+                        "fuente_nombre": "OpenStreetMap" if FUENTE_COORDENADAS == "osm" else "Google Maps",
+                        "total_atractivos": len(ATRACTIVOS)})
     except Exception as e:
         print("ERROR API FUENTE POST:", e)
         return jsonify({"exito": False, "error": str(e)}), 500
 
-# ============================================================
-# INICIO
-# ============================================================
 
 if __name__ == "__main__":
-    print("==========================================")
-    print(" RUTAS TURÍSTICAS DE COCLÉ")
-    print(" Optimización mediante Dijkstra")
-    print(" Grafo: atractivo<->hub, hub<->hub")
-    print("==========================================")
-    print(f"Atractivos registrados: {len(ATRACTIVOS)}")
-    print(f"Fuente de coordenadas: {FUENTE_COORDENADAS.upper()}")
-    print(f"Factor de holgura de tiempo: {FACTOR_HOLGURA} (+{round((FACTOR_HOLGURA - 1) * 100)}%)")
-    print("Servidor iniciado.")
-
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
-        debug=os.environ.get("FLASK_DEBUG", "0") == "1"
-    )
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)),
+            debug=os.environ.get("FLASK_DEBUG", "0") == "1")
