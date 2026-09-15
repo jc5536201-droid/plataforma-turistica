@@ -10,7 +10,7 @@ ENFOQUE METODOLÓGICO
   Al ser una transformación lineal de la distancia, optimizar por costo
   produce la MISMA ruta que optimizar por distancia. Por eso la plataforma
   reporta el costo como MÉTRICA INFORMATIVA, no como criterio independiente.
-  El badge "Costo" en la UI está deshabilitado y marcado como métrica.
+  El badge "Costo" en la UI está marcado como métrica informativa.
 • El criterio "tiempo" sí es distinto (usa velocidades reales de OSRM),
   por lo que puede producir rutas diferentes a distancia.
 
@@ -22,6 +22,12 @@ El grafo NO es completo. Se construye así:
   - Se crean aristas atractivo ↔ hub.
   - Los 5 hubs (Penonomé, Aguadulce, Antón, La Pintada, Natá) se conectan
     completamente entre sí (K5).
+Consecuencia importante: los spokes del mismo hub NO se conectan entre sí.
+Una ruta como 20 → 23 debe pasar por el hub (20 → 18 → 23).
+Por eso, para calcular el orden óptimo de visita de un día, se usa una
+matriz de distancias mínimas calculada con Dijkstra sobre el grafo completo,
+no las aristas directas.
+
 Esto reduce las consultas a OSRM de O(n²)=841 a O(n·h + h²)≈34.
 Trade-off: rutas entre atractivos de distinto hub pueden dar un pequeño
 rodeo pasando por el hub. Documentado en la tesis como decisión de diseño.
@@ -61,19 +67,22 @@ app = Flask(__name__)
 # ============================================================
 
 OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
-COSTO_POR_KM = 0.15          # Tarifa uniforme: reportada como métrica informativa
+COSTO_POR_KM = 0.15          # Tarifa uniforme: métrica informativa
 TIMEOUT = 30
 MAX_RETRIES = 3
 
 VELOCIDAD_FALLBACK_KMH = 40
 
-# Factor de holgura: el tiempo de conducción OSRM se multiplica por este valor
-# para reflejar paradas, tráfico y visitas. Configurable vía env var.
-# Poner FACTOR_HOLGURA=1.0 desactiva la holgura.
+# Factor de holgura: multiplica el tiempo de conducción OSRM para reflejar
+# paradas, tráfico y visitas. Configurable vía env var.
+# FACTOR_HOLGURA=1.0 desactiva la holgura.
 FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.25"))
 
-# Criterio oficial del proyecto (documentado, no cambia por env var)
+# Criterio oficial del proyecto
 CRITERIO_OFICIAL = "distancia"
+
+# Fuente oficial del proyecto
+FUENTE_OFICIAL = "google"
 
 # ============================================================
 # COORDENADAS — FUENTE OFICIAL: GOOGLE MAPS
@@ -259,8 +268,6 @@ ATRACTIVOS_OSM = {
          "descripcion": "Tirolesa y aventura en la selva"}
 }
 
-# Fuente oficial del proyecto = Google Maps
-FUENTE_OFICIAL = "google"
 FUENTE_COORDENADAS = os.environ.get("FUENTE_COORDENADAS", FUENTE_OFICIAL).lower()
 if FUENTE_COORDENADAS not in ("google", "osm"):
     FUENTE_COORDENADAS = FUENTE_OFICIAL
@@ -276,7 +283,7 @@ ATRACTIVOS = obtener_atractivos_por_fuente(FUENTE_COORDENADAS)
 
 HUBS = {15, 16, 17, 18, 19}
 
-# Asignación atractivo → hub más cercano (decisión de diseño hub-and-spoke)
+# Asignación atractivo → hub más cercano
 ASIGNACION_HUB = {
     12: 15, 8: 15, 14: 15, 22: 15,
     5: 17, 4: 17, 2: 17, 1: 17,
@@ -295,8 +302,10 @@ def edges_topologia():
       • Cada atractivo se conecta SOLO a su hub asignado.
       • Los 5 hubs se conectan completamente entre sí (K5).
       • Reduce consultas a OSRM de O(n²)=841 a O(n·h + h²)≈34.
-      • Trade-off: rutas entre atractivos de distinto hub pueden dar un
-        pequeño rodeo pasando por el hub intermedio.
+
+    IMPORTANTE: los spokes del mismo hub NO se conectan entre sí.
+    Un salto 20 → 23 (ambos spokes del hub 18) no es una arista directa;
+    debe resolverse como 20 → 18 → 23 vía Dijkstra.
     """
     aristas = []
     for nodo, hub in ASIGNACION_HUB.items():
@@ -401,8 +410,7 @@ GRAFO = {}
 PUNTOS_AJUSTADOS = {}
 FUENTE_GRAFO = None
 
-# Lock para evitar race conditions: si dos peticiones llegan simultáneamente
-# mientras el grafo no está listo, solo una lo construye y la otra espera.
+# Lock para evitar race conditions durante la construcción del grafo
 _lock_grafo = threading.Lock()
 
 
@@ -417,13 +425,12 @@ def asegurar_grafo_actualizado():
     """
     Verifica que el grafo esté listo para la fuente actual.
     Usa un lock para evitar que dos peticiones concurrentes construyan
-    el grafo simultáneamente (race condition).
+    el grafo simultáneamente.
     """
     global GRAFO, PUNTOS_AJUSTADOS, FUENTE_GRAFO
     if GRAFO and FUENTE_GRAFO == FUENTE_COORDENADAS:
         return
     with _lock_grafo:
-        # Doble verificación dentro del lock
         if GRAFO and FUENTE_GRAFO == FUENTE_COORDENADAS:
             return
         preparar_grafo()
@@ -488,19 +495,60 @@ def dijkstra(grafo, origen, destino, criterio):
     return {"camino": camino, "peso_total": distancias[destino], "criterio": criterio}
 
 
+def _matriz_distancias(nodos, criterio):
+    """
+    Matriz de distancias mínimas entre pares de nodos usando Dijkstra
+    sobre el grafo completo. Devuelve {origen: {destino: distancia}}.
+
+    Es indispensable calcularla así (no con aristas directas) porque el
+    grafo es hub-and-spoke: los spokes del mismo hub no se conectan entre
+    sí, así que la distancia real entre dos spokes pasa por el hub.
+    """
+    campo_peso = {"distancia": "distancia_km", "tiempo": "tiempo_min",
+                  "costo": "costo"}.get(criterio, "distancia_km")
+    matriz = {}
+    for origen in nodos:
+        if origen not in GRAFO:
+            matriz[origen] = {}
+            continue
+        distancias = {n: float("inf") for n in GRAFO}
+        distancias[origen] = 0
+        cola = [(0, origen)]
+        visitados = set()
+        while cola:
+            d, u = heapq.heappop(cola)
+            if u in visitados:
+                continue
+            visitados.add(u)
+            for v, datos in GRAFO.get(u, {}).items():
+                peso = datos.get(campo_peso, 0)
+                if peso <= 0:
+                    continue
+                nd = d + peso
+                if nd < distancias[v]:
+                    distancias[v] = nd
+                    heapq.heappush(cola, (nd, v))
+        matriz[origen] = distancias
+    return matriz
+
+
 def orden_optimo_visita(destinos, criterio="distancia"):
     """
     Encuentra el orden óptimo de visita de un conjunto de destinos
-    (partiendo y volviendo a Penonomé=15) usando fuerza bruta con permutaciones.
-    Para 4-6 destinos es viable (máximo 6! = 720 permutaciones).
-    Consistente con el script de escritorio.
+    (partiendo y volviendo a Penonomé=15) usando fuerza bruta.
+
+    La distancia entre dos nodos NO se lee de una arista directa del
+    grafo (porque el grafo es hub-and-spoke y los spokes no se conectan
+    entre sí), sino que se calcula con Dijkstra sobre el grafo completo.
+    Así el orden puede incluir tránsitos por hubs intermedios sin fallar.
     """
     BASE = 15
     destinos_sin_base = [d for d in destinos if d != BASE]
     if not destinos_sin_base:
         return [], 0.0
 
-    campo_peso = {"distancia": "distancia_km", "tiempo": "tiempo_min", "costo": "costo"}[criterio]
+    nodos_relevantes = [BASE] + destinos_sin_base
+    matriz = _matriz_distancias(nodos_relevantes, criterio)
 
     mejor_costo = float("inf")
     mejor_orden = None
@@ -511,14 +559,11 @@ def orden_optimo_visita(destinos, criterio="distancia"):
         valido = True
         for i in range(len(secuencia) - 1):
             a, b = secuencia[i], secuencia[i + 1]
-            if a not in GRAFO or b not in GRAFO or b not in GRAFO[a]:
+            d = matriz.get(a, {}).get(b)
+            if d is None or d == float("inf"):
                 valido = False
                 break
-            peso = GRAFO[a][b].get(campo_peso, 0)
-            if peso <= 0:
-                valido = False
-                break
-            total += peso
+            total += d
         if valido and total < mejor_costo:
             mejor_costo = total
             mejor_orden = list(perm)
@@ -666,12 +711,10 @@ def api_dia(dia_num):
         destinos = dia["destinos"]
         asegurar_grafo_actualizado()
 
-        # Calcular orden óptimo de visita (partiendo y volviendo a Penonomé)
         orden, _ = orden_optimo_visita(destinos, criterio)
         if orden is None:
             return jsonify({"exito": False, "error": "No se pudo calcular el orden óptimo."}), 500
 
-        # Encadenar Dijkstra entre nodos consecutivos del orden óptimo
         BASE = 15
         secuencia = [BASE] + orden + [BASE]
         tramos = []
@@ -718,7 +761,6 @@ def api_dia(dia_num):
             costo_total += t["costo"]
             if t["fuente_metricas"] != "osrm":
                 todas_osrm = False
-            # Segmentos del tramo (aristas del grafo)
             for j in range(len(t["camino"]) - 1):
                 a, b = t["camino"][j], t["camino"][j + 1]
                 d = GRAFO[a][b]
@@ -816,7 +858,7 @@ def api_fuente_post():
         return jsonify({"exito": True, "fuente": FUENTE_COORDENADAS,
                         "fuente_nombre": "OpenStreetMap" if FUENTE_COORDENADAS == "osm" else "Google Maps",
                         "es_oficial": FUENTE_COORDENADAS == FUENTE_OFICIAL,
-                        "total_atractivos": len(ATTRACTIVOS) if False else len(ATRACTIVOS)})
+                        "total_atractivos": len(ATRACTIVOS)})
     except Exception as e:
         print("ERROR API FUENTE POST:", e)
         return jsonify({"exito": False, "error": str(e)}), 500
@@ -835,7 +877,6 @@ if __name__ == "__main__":
     print(f"Factor de holgura: {FACTOR_HOLGURA} (+{round((FACTOR_HOLGURA - 1) * 100)}%)")
     print(f"Costo por km (informativo): {COSTO_POR_KM} USD/km")
 
-    # Precalentamiento con lock (ya no hay race condition)
     try:
         print("Precalentando el grafo (puede tardar unos segundos)...")
         asegurar_grafo_actualizado()
