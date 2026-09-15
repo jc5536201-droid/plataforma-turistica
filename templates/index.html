@@ -144,7 +144,6 @@
             color: var(--verde);
         }
 
-        /* Badge de criterio informativo (costo) */
         .criterio-badge.informativo {
             background: #f5f5f5;
             color: #888;
@@ -338,7 +337,7 @@
                 </h1>
                 <p class="subtitulo mb-0">
                     <i class="fas fa-route me-1"></i>
-                    Optimización mediante el algoritmo de Dijkstra
+                    Dijkstra decide el orden · OSRM mide la distancia
                     ·
                     <span class="badge-dijkstra">Dijkstra</span>
                     <span class="badge-api">OSRM + OpenStreetMap</span>
@@ -373,11 +372,10 @@
     <div class="aviso-informativo">
         <i class="fas fa-info-circle me-1"></i>
         <strong>Criterio oficial: DISTANCIA.</strong>
-        El sistema permite explorar además Tiempo (con velocidades reales de OSRM) y
-        Costo como métricas informativas. El costo se calcula como
-        distancia × {{ "%.2f"|format(0.15) }} USD/km (tarifa uniforme), por lo que
-        <strong>coincide con la ruta por distancia</strong> y se reporta solo como
-        dato de apoyo al turista.
+        El sistema usa <strong>Dijkstra</strong> para decidir el orden óptimo de visita y
+        <strong>OSRM</strong> para medir distancias reales. El <em>costo</em> se reporta como
+        métrica informativa (distancia × 0.15 USD/km) y por lo tanto coincide con la ruta
+        por distancia.
         <span id="avisoHolgura"></span>
     </div>
 
@@ -466,7 +464,7 @@
             <div class="d-flex gap-2 mb-3">
                 <button class="btn-calcular" onclick="calcularRuta()">
                     <i class="fas fa-route me-2"></i>
-                    Calcular Ruta Óptima con Dijkstra
+                    Calcular Ruta Óptima
                 </button>
                 <button class="btn-geojson" onclick="cargarGeoJSON()"
                         style="width: auto; padding: 14px 25px; margin-top: 0;">
@@ -484,7 +482,7 @@
                 <div class="text-center text-muted py-5">
                     <i class="fas fa-road fa-3x mb-3 d-block" style="color:#dce0e5;"></i>
                     <p>Selecciona origen y destino<br>para calcular la ruta óptima</p>
-                    <small>Algoritmo: <strong>Dijkstra</strong></small>
+                    <small>Algoritmo: <strong>Dijkstra</strong> + OSRM</small>
                     <hr>
                     <small class="text-muted">
                         <i class="fas fa-file-alt me-1"></i>
@@ -504,7 +502,7 @@
     <p class="text-center text-muted small mb-4">
         <i class="fas fa-info-circle me-1"></i>
         Cada día calcula el <strong>orden óptimo de visita</strong> (partiendo y
-        volviendo a Penonomé) con el criterio seleccionado.
+        volviendo a Penonomé) con <strong>Dijkstra</strong>, y mide la distancia real con <strong>OSRM</strong>.
     </p>
     <div class="row g-3" id="diasContainer"></div>
 
@@ -615,7 +613,6 @@ function llenarSelectores() {
 
 function seleccionarCriterio(criterio) {
     if (criterio === 'costo') {
-        // Aviso explícito: costo = distancia × tarifa uniforme
         const continuar = confirm(
             "ℹ️ El criterio COSTO usa una tarifa uniforme (distancia × 0.15 USD/km).\n\n" +
             "Por eso produce la MISMA ruta que DISTANCIA. Se reporta como métrica " +
@@ -644,7 +641,7 @@ async function calcularRuta() {
         <div class="text-center py-4">
             <div class="spinner-border text-success" role="status"></div>
             <p class="mt-3 mb-1">Calculando ruta óptima...</p>
-            <small class="text-muted">Algoritmo de Dijkstra</small>
+            <small class="text-muted">Dijkstra decide · OSRM mide</small>
         </div>
     `;
 
@@ -792,7 +789,7 @@ function actualizarEstadisticas(data) {
 }
 
 // ============================================================
-// PANEL
+// PANEL — RUTA ENTRE DOS NODOS (Solución D2)
 // ============================================================
 
 function actualizarPanel(data) {
@@ -806,14 +803,13 @@ function actualizarPanel(data) {
 
     const fuenteMetricas = data.fuente_metricas || 'osrm';
     const badgeMetricas = fuenteMetricas === 'osrm'
-        ? `<span class="badge bg-success ms-1" title="Métricas calculadas por OSRM (ruta completa encadenada)">
+        ? `<span class="badge bg-success ms-1" title="Métricas calculadas por OSRM (ruta directa)">
               <i class="fas fa-check-circle me-1"></i>Métricas: OSRM
            </span>`
         : `<span class="badge bg-warning text-dark ms-1" title="OSRM no respondió, se usó Haversine como aproximación">
               <i class="fas fa-exclamation-triangle me-1"></i>Métricas: aproximadas
            </span>`;
 
-    // Desglose de tiempo
     const tCond = Number(data.tiempo_conduccion_min || data.tiempo_min || 0);
     const tTotal = Number(data.tiempo_min || tCond);
     const holgura = tTotal - tCond;
@@ -825,10 +821,23 @@ function actualizarPanel(data) {
         </div>`;
     }
 
+    // Bloque explicativo de la Solución D2 (solo si hay camino lógico distinto)
+    let bloqueD2 = "";
+    if (Array.isArray(data.nodos_logicos) && data.nodos_logicos.length > 2) {
+        const logicaStr = data.nodos_logicos.map(n => n.cod).join(" → ");
+        bloqueD2 = `
+            <div class="alert alert-info small mb-3" style="font-size:0.78rem;">
+                <strong><i class="fas fa-route me-1"></i>Decisión por Dijkstra:</strong><br>
+                <span style="font-family:monospace;">${logicaStr}</span><br>
+                <span class="text-muted">La ruta lógica pasa por hubs; la distancia física se mide directa con OSRM.</span>
+            </div>
+        `;
+    }
+
     let html = `
         <h6 class="fw-bold text-success mb-3">
             <i class="fas fa-route me-2"></i>
-            Ruta óptima <span class="badge bg-success ms-2">Dijkstra</span>
+            Ruta óptima <span class="badge bg-success ms-2">Dijkstra + OSRM</span>
         </h6>
 
         <div class="mb-2">${badgeMetricas}</div>
@@ -845,12 +854,14 @@ function actualizarPanel(data) {
             </div>
             ${desgloseTiempo}
         </div>
+
         <div class="border-top pt-3">
             <p class="mb-1"><strong>Origen:</strong> ${data.nodos_ruta?.[0]?.nombre || 'No disponible'}</p>
             <p class="mb-1"><strong>Destino:</strong> ${data.nodos_ruta?.[data.nodos_ruta.length - 1]?.nombre || 'No disponible'}</p>
         </div>
         <hr>
-        <h6 class="fw-bold">Camino encontrado por Dijkstra</h6>
+        ${bloqueD2}
+        <h6 class="fw-bold">Camino físico (OSRM)</h6>
     `;
 
     if (Array.isArray(data.nodos_ruta)) {
@@ -862,20 +873,6 @@ function actualizarPanel(data) {
                         <strong>${nodo.nombre}</strong><br>
                         <small class="text-muted">Nodo: ${nodo.cod}</small>
                     </div>
-                </div>
-            `;
-        });
-    }
-
-    if (Array.isArray(data.segmentos) && data.segmentos.length > 0) {
-        html += `<hr><h6 class="fw-bold">Detalle de los tramos (grafo)</h6>`;
-        data.segmentos.forEach((tramo, indice) => {
-            const origen = data.nodos_ruta?.find(n => Number(n.id) === Number(tramo.origen));
-            const destino = data.nodos_ruta?.find(n => Number(n.id) === Number(tramo.destino));
-            html += `
-                <div class="border rounded p-2 mb-2">
-                    <small><strong>${indice + 1}.</strong> ${origen?.nombre || 'Origen'} → ${destino?.nombre || 'Destino'}</small><br>
-                    <small class="text-muted">${Number(tramo.distancia_km).toFixed(2)} km · ${Number(tramo.tiempo_min).toFixed(1)} min · $${Number(tramo.costo).toFixed(2)}</small>
                 </div>
             `;
         });
@@ -1023,7 +1020,8 @@ function hablarHarpia() {
 
         mensaje =
             `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá, y te acompañaré en este recorrido. ` +
-            `Usando el algoritmo de Dijkstra, se calculó la ruta óptima según el criterio de ${criterio}. ` +
+            `Usando el algoritmo de Dijkstra para decidir el orden y OSRM para medir la distancia, ` +
+            `se calculó la ruta óptima según el criterio de ${criterio}. ` +
             `El recorrido inicia en ${origen} y termina en ${destino}, pasando por ${ultimaRuta.nodos_ruta.length} atractivos. ` +
             `La distancia total es de ${distancia} kilómetros, el tiempo estimado es de ${tiempo} minutos ` +
             `y el costo aproximado es de ${costo} dólares.` +
@@ -1033,7 +1031,7 @@ function hablarHarpia() {
         mensaje =
             `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá. ` +
             `Aún no has calculado ninguna ruta. ` +
-            `Selecciona un origen y un destino, y presiona el botón de calcular ruta óptima con Dijkstra. ` +
+            `Selecciona un origen y un destino, y presiona el botón de calcular ruta óptima. ` +
             `Después podrás hacerme clic de nuevo y te contaré todos los detalles de tu recorrido por Coclé.`;
     }
 
@@ -1076,7 +1074,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-// DÍAS — AHORA USA EL ENDPOINT /api/dia/<n> QUE OPTIMIZA EL ORDEN
+// DÍAS — usa /api/dia/<n> que aplica Solución D2
 // ============================================================
 
 async function cargarDias() {
@@ -1111,7 +1109,7 @@ async function cargarDia(diaNum) {
         <div class="text-center py-4">
             <div class="spinner-border text-success" role="status"></div>
             <p class="mt-3 mb-1">Calculando itinerario óptimo del día ${diaNum}...</p>
-            <small class="text-muted">Resolviendo orden de visita por fuerza bruta + Dijkstra</small>
+            <small class="text-muted">Dijkstra decide el orden · OSRM mide la distancia</small>
         </div>
     `;
 
@@ -1141,7 +1139,8 @@ function actualizarPanelDia(data) {
     let html = `
         <h6 class="fw-bold text-success mb-3">
             <i class="fas fa-calendar-day me-2"></i>
-            Día ${data.dia} <span class="badge bg-success ms-2">Orden óptimo</span>
+            Día ${data.dia}
+            <span class="badge bg-success ms-2">Orden óptimo (Dijkstra)</span>
         </h6>
         <div class="alert alert-light border mb-2">
             <strong>Zona:</strong> ${data.zona}<br>
@@ -1250,7 +1249,7 @@ async function cambiarFuente(nuevaFuente) {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('================================');
     console.log('Plataforma de rutas de Coclé');
-    console.log('Algoritmo: Dijkstra');
+    console.log('Método: D2 — Dijkstra decide, OSRM mide');
     console.log('Criterio oficial:', CONFIG.criterioOficial);
     console.log('Fuente oficial:', CONFIG.fuenteOficial);
     console.log('Atractivos:', Object.keys(ATRACTIVOS).length);
