@@ -641,13 +641,16 @@ async function calcularRuta() {
         ultimaRuta = data;
         rutaActual = Array.isArray(data.camino) ? data.camino : [origen, destino];
         if (rutaGeoJSONLayer) { mapa.removeLayer(rutaGeoJSONLayer); rutaGeoJSONLayer = null; }
-        dibujarRuta(data);
+        await dibujarRuta(data);
         actualizarEstadisticas(data);
         actualizarPanel(data);
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('panelRuta').innerHTML = `
-            <div class="alert alert-danger"><strong>Error:</strong> ${error.message}</div>
+            <div class="alert alert-danger">
+                <strong>Error:</strong> ${error.message}<br>
+                <small class="text-muted">Revisa la consola del servidor Flask para más detalles.</small>
+            </div>
         `;
     }
 }
@@ -658,8 +661,18 @@ async function obtenerRutaDijkstra(origen, destino, criterio) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ origen, destino, criterio })
     });
+
+    const ct = respuesta.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+        const texto = await respuesta.text();
+        console.error('Respuesta no-JSON del servidor:', texto.substring(0, 500));
+        throw new Error(`El servidor respondió con status ${respuesta.status} y contenido no-JSON. Revisa la consola del servidor Flask.`);
+    }
+
     const data = await respuesta.json();
-    if (!respuesta.ok || !data.exito) throw new Error(data.error || 'No se pudo calcular la ruta');
+    if (!respuesta.ok || !data.exito) {
+        throw new Error(data.error || `Error ${respuesta.status}`);
+    }
     return data;
 }
 
@@ -674,23 +687,63 @@ function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
 }
 
 // ============================================================
-// DIBUJAR RUTA
+// DIBUJAR RUTA (robusto, con fallback)
 // ============================================================
 
-function dibujarRuta(data) {
-    if (!data || !data.puntos_ruta || data.puntos_ruta.length < 2) return;
+async function dibujarRuta(data) {
+    if (!data) return;
+
+    // 1) Si el backend no envió geometría, pedirla a /api/geometria
+    if ((!data.puntos_ruta || data.puntos_ruta.length < 2) &&
+        Array.isArray(data.camino) && data.camino.length >= 2) {
+        try {
+            const r = await fetch('/api/geometria', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ camino: data.camino })
+            });
+            const ct = r.headers.get('content-type') || '';
+            if (r.ok && ct.includes('application/json')) {
+                const g = await r.json();
+                if (g.exito && Array.isArray(g.puntos_ruta)) {
+                    data.puntos_ruta = g.puntos_ruta;
+                }
+            } else {
+                console.warn('Geometría no disponible (status', r.status, '). Se usará línea recta.');
+            }
+        } catch (e) {
+            console.warn('Error obteniendo geometría por carretera:', e);
+        }
+    }
+
+    // 2) Fallback: línea recta entre nodos
+    if (!data.puntos_ruta || data.puntos_ruta.length < 2) {
+        data.puntos_ruta = (data.nodos_ruta || [])
+            .map(n => [n.lat_carretera || n.lat, n.lng_carretera || n.lng])
+            .filter(p => p[0] != null && p[1] != null);
+    }
+
+    if (data.puntos_ruta.length < 2) {
+        console.warn('No hay puntos suficientes para dibujar la ruta');
+        return;
+    }
+
+    // 3) Limpiar capas anteriores
     if (rutaLayer) { mapa.removeLayer(rutaLayer); rutaLayer = null; }
     marcadoresRuta.forEach(m => mapa.removeLayer(m));
     marcadoresRuta = [];
 
+    // 4) Dibujar polilínea
     rutaLayer = L.polyline(data.puntos_ruta, {
-        color: '#1D9E75', weight: 5, opacity: 0.9, lineJoin: 'round', smoothFactor: 0.5
+        color: '#1D9E75', weight: 5, opacity: 0.9,
+        lineJoin: 'round', smoothFactor: 0.5
     }).addTo(mapa);
 
     const bounds = rutaLayer.getBounds();
     if (bounds.isValid()) mapa.fitBounds(bounds, { padding: [50, 50] });
 
-    if (data.nodos_ruta && data.nodos_ruta.length > 0) {
+    // 5) Marcadores numerados
+    if (Array.isArray(data.nodos_ruta)) {
         data.nodos_ruta.forEach((nodo, indice) => {
             let color = '#1D9E75';
             if (indice === 0) color = '#2E86C1';
@@ -716,7 +769,7 @@ function actualizarEstadisticas(data) {
 }
 
 // ============================================================
-// PANEL — RUTA ÓPTIMA (grafo completo)
+// PANEL — RUTA ÓPTIMA
 // ============================================================
 
 function actualizarPanel(data) {
@@ -936,18 +989,13 @@ function hablarHarpia() {
         };
         const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
 
-        const notaMetricas = (ultimaRuta.fuente_metricas === 'haversine')
-            ? ' Ten en cuenta que estas métricas son aproximadas, porque el servicio de rutas no respondió en este momento.'
-            : '';
-
         mensaje =
             `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá, y te acompañaré en este recorrido. ` +
             `Usando el algoritmo de Dijkstra, se calculó la ruta óptima según el criterio de ${criterio}. ` +
             `El recorrido inicia en ${origen} y termina en ${destino}, pasando por ${ultimaRuta.nodos_ruta.length} atractivos. ` +
             `La distancia total es de ${distancia} kilómetros, el tiempo estimado es de ${tiempo} minutos ` +
-            `y el costo aproximado es de ${costo} dólares.` +
-            notaMetricas +
-            ` ¡Disfruta tu recorrido por la provincia de Coclé!`;
+            `y el costo aproximado es de ${costo} dólares. ` +
+            `¡Disfruta tu recorrido por la provincia de Coclé!`;
     } else {
         mensaje =
             `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá. ` +
@@ -1001,6 +1049,11 @@ document.addEventListener('DOMContentLoaded', function() {
 async function cargarDias() {
     try {
         const respuesta = await fetch('/api/dias');
+        const ct = respuesta.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            console.error('Respuesta no-JSON al cargar días');
+            return;
+        }
         const dias = await respuesta.json();
         DIAS_CACHE = dias;
         const container = document.getElementById('diasContainer');
@@ -1036,11 +1089,17 @@ async function cargarDia(diaNum) {
 
     try {
         const respuesta = await fetch(`/api/dia/${diaNum}?criterio=${criterioActual}`);
+        const ct = respuesta.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const texto = await respuesta.text();
+            console.error('Respuesta no-JSON:', texto.substring(0, 500));
+            throw new Error(`El servidor respondió con status ${respuesta.status}.`);
+        }
         const data = await respuesta.json();
         if (!respuesta.ok || !data.exito) throw new Error(data.error || 'No se pudo calcular el día');
         ultimaRuta = data;
         if (rutaGeoJSONLayer) { mapa.removeLayer(rutaGeoJSONLayer); rutaGeoJSONLayer = null; }
-        dibujarRuta(data);
+        await dibujarRuta(data);
         actualizarEstadisticas(data);
         actualizarPanelDia(data);
     } catch (error) {
@@ -1104,6 +1163,11 @@ function actualizarPanelDia(data) {
 async function cargarFuenteCoordenadas() {
     try {
         const respuesta = await fetch('/api/fuente');
+        const ct = respuesta.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            console.warn('Respuesta no-JSON al cargar fuente');
+            return;
+        }
         const data = await respuesta.json();
         const badge = document.getElementById('badgeFuente');
         const select = document.getElementById('fuenteSelect');
@@ -1137,8 +1201,8 @@ async function cambiarFuente(nuevaFuente) {
             `La fuente OFICIAL del proyecto es ${CONFIG.fuenteOficial.toUpperCase()}.\n` +
             `Este cambio se usa solo para análisis de sensibilidad y los resultados ` +
             `pueden variar ligeramente.\n\n` +
-            `El servidor reconstruirá el grafo con las coordenadas de la nueva fuente ` +
-            `la próxima vez que se use.\n\n¿Deseas continuar?`
+            `El servidor reconstruirá el grafo con las coordenadas de la nueva fuente.\n\n` +
+            `¿Deseas continuar?`
         );
         if (!confirmar) {
             select.value = CONFIG.fuenteActual;
@@ -1155,6 +1219,10 @@ async function cambiarFuente(nuevaFuente) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fuente: nuevaFuente })
         });
+        const ct = respuesta.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            throw new Error('Respuesta no-JSON del servidor');
+        }
         const data = await respuesta.json();
         if (!respuesta.ok || !data.exito) throw new Error(data.error || 'No se pudo cambiar la fuente');
         window.location.reload();
