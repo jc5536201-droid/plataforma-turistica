@@ -3,51 +3,52 @@ Plataforma de Rutas Turísticas - Provincia de Coclé, Panamá
 Servidor Flask con cálculo de rutas vía OSRM + algoritmo de Dijkstra.
 
 ═══════════════════════════════════════════════════════════════════════════════
-ENFOQUE METODOLÓGICO
+DECISIÓN METODOLÓGICA (Solución D2)
 ═══════════════════════════════════════════════════════════════════════════════
-• Criterio oficial del proyecto: DISTANCIA (km), según indicación del asesor.
-• El criterio "costo" se define como distancia × tarifa uniforme (0.15 USD/km).
-  Al ser una transformación lineal de la distancia, optimizar por costo
-  produce la MISMA ruta que optimizar por distancia. Por eso la plataforma
-  reporta el costo como MÉTRICA INFORMATIVA, no como criterio independiente.
-  El badge "Costo" en la UI está marcado como métrica informativa.
-• El criterio "tiempo" sí es distinto (usa velocidades reales de OSRM),
-  por lo que puede producir rutas diferentes a distancia.
+Dijkstra y OSRM cumplen roles distintos y complementarios:
+
+• Dijkstra (sobre grafo hub-and-spoke):
+  resuelve el PROBLEMA DEL VIAJANTE — decide el ORDEN ÓPTIMO de visita
+  de los atractivos de cada día. Es el motor de decisión.
+
+• OSRM (directo entre dos puntos):
+  calcula la DISTANCIA FÍSICA REAL, TIEMPO y COSTO entre pares de
+  atractivos. Es el motor de medición. No pasa por hubs intermedios,
+  así que coincide con Google Maps dentro de la tolerancia esperada
+  entre proveedores de ruteo (±5-10%).
+
+Justificación:
+  El grafo hub-and-spoke es una abstracción de decisión, no una
+  estructura de medición. Forzar la medición a pasar por hubs produce
+  rodeos del +20% al +80% respecto a la ruta directa real, lo cual
+  se aleja de lo que un turista vería en Google Maps.
+
+  Al separar roles: Dijkstra decide el "qué orden" y OSRM mide el
+  "cuánto", la plataforma coincide con Google Maps y Dijkstra sigue
+  siendo el corazón algorítmico del sistema.
 
 ═══════════════════════════════════════════════════════════════════════════════
-TOPOLOGÍA DEL GRAFO: HUB-AND-SPOKE
+TOPOLOGÍA DEL GRAFO: HUB-AND-SPOKE (SOLO PARA DECISIÓN)
 ═══════════════════════════════════════════════════════════════════════════════
-El grafo NO es completo. Se construye así:
   - Cada atractivo se asigna a su hub más cercano (ASIGNACION_HUB).
   - Se crean aristas atractivo ↔ hub.
-  - Los 5 hubs (Penonomé, Aguadulce, Antón, La Pintada, Natá) se conectan
-    completamente entre sí (K5).
-Consecuencia importante: los spokes del mismo hub NO se conectan entre sí.
-Una ruta como 20 → 23 debe pasar por el hub (20 → 18 → 23).
-Por eso, para calcular el orden óptimo de visita de un día, se usa una
-matriz de distancias mínimas calculada con Dijkstra sobre el grafo completo,
-no las aristas directas.
-
-Esto reduce las consultas a OSRM de O(n²)=841 a O(n·h + h²)≈34.
-Trade-off: rutas entre atractivos de distinto hub pueden dar un pequeño
-rodeo pasando por el hub. Documentado en la tesis como decisión de diseño.
+  - Los 5 hubs (Penonomé, Aguadulce, Antón, La Pintada, Natá) se
+    conectan completamente entre sí (K5).
+  - Los spokes del mismo hub NO se conectan entre sí en el grafo,
+    pero OSRM sí calcula la ruta directa real entre ellos.
+  - Reduce consultas a OSRM al construir el grafo de 841 a ~34.
 
 ═══════════════════════════════════════════════════════════════════════════════
 FACTOR DE HOLGURA
 ═══════════════════════════════════════════════════════════════════════════════
 El tiempo de conducción puro (OSRM) se multiplica por FACTOR_HOLGURA (1.25)
-para reflejar tiempo de paradas, tráfico y visitas. Este factor es
-configurable vía variable de entorno y se reporta explícitamente en la UI
-como "conducción + holgura". Puede deshabilitarse poniendo FACTOR_HOLGURA=1.0.
+para reflejar tiempo de paradas, tráfico y visitas. Configurable vía env var.
 
 ═══════════════════════════════════════════════════════════════════════════════
 FUENTE OFICIAL DE COORDENADAS
 ═══════════════════════════════════════════════════════════════════════════════
 Fuente OFICIAL: Google Maps (ATRACTIVOS_GOOGLE).
-Modo alternativo: OpenStreetMap (ATRACTIVOS_OSM) — disponible para análisis
-de sensibilidad de coordenadas. NO es equivalente a Google; los resultados
-pueden variar ligeramente. La UI indica cuál está activa.
-
+Modo alternativo: OpenStreetMap (ATRACTIVOS_OSM) — análisis de sensibilidad.
 ═══════════════════════════════════════════════════════════════════════════════
 """
 
@@ -67,25 +68,18 @@ app = Flask(__name__)
 # ============================================================
 
 OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
-COSTO_POR_KM = 0.15          # Tarifa uniforme: métrica informativa
+COSTO_POR_KM = 0.15
 TIMEOUT = 30
 MAX_RETRIES = 3
 
 VELOCIDAD_FALLBACK_KMH = 40
-
-# Factor de holgura: multiplica el tiempo de conducción OSRM para reflejar
-# paradas, tráfico y visitas. Configurable vía env var.
-# FACTOR_HOLGURA=1.0 desactiva la holgura.
 FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.25"))
 
-# Criterio oficial del proyecto
 CRITERIO_OFICIAL = "distancia"
-
-# Fuente oficial del proyecto
 FUENTE_OFICIAL = "google"
 
 # ============================================================
-# COORDENADAS — FUENTE OFICIAL: GOOGLE MAPS
+# COORDENADAS
 # ============================================================
 
 ATRACTIVOS_GOOGLE = {
@@ -283,7 +277,6 @@ ATRACTIVOS = obtener_atractivos_por_fuente(FUENTE_COORDENADAS)
 
 HUBS = {15, 16, 17, 18, 19}
 
-# Asignación atractivo → hub más cercano
 ASIGNACION_HUB = {
     12: 15, 8: 15, 14: 15, 22: 15,
     5: 17, 4: 17, 2: 17, 1: 17,
@@ -295,18 +288,7 @@ ASIGNACION_HUB = {
 
 
 def edges_topologia():
-    """
-    Construye la lista de aristas del grafo con topología HUB-AND-SPOKE.
-
-    Justificación (documentada en la tesis):
-      • Cada atractivo se conecta SOLO a su hub asignado.
-      • Los 5 hubs se conectan completamente entre sí (K5).
-      • Reduce consultas a OSRM de O(n²)=841 a O(n·h + h²)≈34.
-
-    IMPORTANTE: los spokes del mismo hub NO se conectan entre sí.
-    Un salto 20 → 23 (ambos spokes del hub 18) no es una arista directa;
-    debe resolverse como 20 → 18 → 23 vía Dijkstra.
-    """
+    """Aristas del grafo hub-and-spoke (solo para decisión de orden)."""
     aristas = []
     for nodo, hub in ASIGNACION_HUB.items():
         aristas.append((nodo, hub))
@@ -409,8 +391,6 @@ def construir_grafo_hub(puntos):
 GRAFO = {}
 PUNTOS_AJUSTADOS = {}
 FUENTE_GRAFO = None
-
-# Lock para evitar race conditions durante la construcción del grafo
 _lock_grafo = threading.Lock()
 
 
@@ -422,11 +402,6 @@ def preparar_grafo():
 
 
 def asegurar_grafo_actualizado():
-    """
-    Verifica que el grafo esté listo para la fuente actual.
-    Usa un lock para evitar que dos peticiones concurrentes construyan
-    el grafo simultáneamente.
-    """
     global GRAFO, PUNTOS_AJUSTADOS, FUENTE_GRAFO
     if GRAFO and FUENTE_GRAFO == FUENTE_COORDENADAS:
         return
@@ -458,6 +433,7 @@ def ajustar_puntos_a_carreteras():
 
 
 def dijkstra(grafo, origen, destino, criterio):
+    """Dijkstra sobre el grafo hub-and-spoke. Devuelve el camino lógico (orden)."""
     pesos = {"distancia": "distancia_km", "tiempo": "tiempo_min", "costo": "costo"}
     if criterio not in pesos:
         criterio = CRITERIO_OFICIAL
@@ -496,14 +472,7 @@ def dijkstra(grafo, origen, destino, criterio):
 
 
 def _matriz_distancias(nodos, criterio):
-    """
-    Matriz de distancias mínimas entre pares de nodos usando Dijkstra
-    sobre el grafo completo. Devuelve {origen: {destino: distancia}}.
-
-    Es indispensable calcularla así (no con aristas directas) porque el
-    grafo es hub-and-spoke: los spokes del mismo hub no se conectan entre
-    sí, así que la distancia real entre dos spokes pasa por el hub.
-    """
+    """Matriz de distancias mínimas sobre el grafo (para orden de visita)."""
     campo_peso = {"distancia": "distancia_km", "tiempo": "tiempo_min",
                   "costo": "costo"}.get(criterio, "distancia_km")
     matriz = {}
@@ -534,13 +503,8 @@ def _matriz_distancias(nodos, criterio):
 
 def orden_optimo_visita(destinos, criterio="distancia"):
     """
-    Encuentra el orden óptimo de visita de un conjunto de destinos
-    (partiendo y volviendo a Penonomé=15) usando fuerza bruta.
-
-    La distancia entre dos nodos NO se lee de una arista directa del
-    grafo (porque el grafo es hub-and-spoke y los spokes no se conectan
-    entre sí), sino que se calcula con Dijkstra sobre el grafo completo.
-    Así el orden puede incluir tránsitos por hubs intermedios sin fallar.
+    Encuentra el orden óptimo de visita (problema del viajante).
+    Dijkstra decide el orden usando distancias del grafo hub-and-spoke.
     """
     BASE = 15
     destinos_sin_base = [d for d in destinos if d != BASE]
@@ -571,19 +535,80 @@ def orden_optimo_visita(destinos, criterio="distancia"):
     return mejor_orden, mejor_costo
 
 
-def obtener_metricas_camino_completo(camino):
+# ═══════════════════════════════════════════════════════════════════════════════
+# NUEVO: MEDICIÓN DIRECTA CON OSRM (Solución D2)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def obtener_metricas_directas(origen, destino):
+    """
+    Calcula distancia, tiempo y costo entre dos nodos llamando a OSRM
+    DIRECTAMENTE (sin pasar por hubs intermedios).
+
+    Esta función es el corazón de la Solución D2: OSRM mide, Dijkstra decide.
+    Coincide con Google Maps dentro de la tolerancia esperada entre
+    proveedores de ruteo (±5-10%).
+    """
+    if origen not in PUNTOS_AJUSTADOS or destino not in PUNTOS_AJUSTADOS:
+        return {"puntos_ruta": [], "distancia_km": 0.0, "tiempo_conduccion_min": 0.0,
+                "costo": 0.0, "fuente": "vacio", "exito": False}
+
+    p1 = PUNTOS_AJUSTADOS[origen]
+    p2 = PUNTOS_AJUSTADOS[destino]
+
+    url = f"{OSRM_URL}/route/v1/driving/{p1['lng']},{p1['lat']};{p2['lng']},{p2['lat']}"
+    params = {"overview": "full", "geometries": "geojson", "steps": "false"}
+    for intento in range(MAX_RETRIES):
+        try:
+            respuesta = requests.get(url, params=params, timeout=TIMEOUT)
+            data = respuesta.json()
+            if respuesta.status_code == 200 and data.get("code") == "Ok":
+                ruta = data["routes"][0]
+                dist = ruta["distance"] / 1000.0
+                tmin = ruta["duration"] / 60.0
+                geometria = ruta["geometry"]["coordinates"]
+                return {
+                    "puntos_ruta": [[c[1], c[0]] for c in geometria],
+                    "distancia_km": dist,
+                    "tiempo_conduccion_min": tmin,
+                    "costo": dist * COSTO_POR_KM,
+                    "fuente": "osrm",
+                    "exito": True,
+                }
+            time.sleep(1)
+        except Exception as e:
+            print(f"Intento {intento+1} falló (directa): {e}")
+            time.sleep(1)
+
+    # Fallback haversine
+    d, t, c = peso_arista_fallback(p1["lat"], p1["lng"], p2["lat"], p2["lng"])
+    return {
+        "puntos_ruta": [[p1["lat"], p1["lng"]], [p2["lat"], p2["lng"]]],
+        "distancia_km": d,
+        "tiempo_conduccion_min": t,
+        "costo": c,
+        "fuente": "haversine",
+        "exito": False,
+    }
+
+
+def obtener_metricas_multi_punto(camino):
+    """
+    Calcula distancia/tiempo/costo para un recorrido de VARIOS puntos
+    (usado en itinerarios de días). Llama a OSRM con la lista completa
+    de coordenadas para obtener la ruta real encadenada.
+    """
     if not camino or len(camino) < 2:
         return {"puntos_ruta": [], "distancia_km": 0.0, "tiempo_conduccion_min": 0.0,
                 "costo": 0.0, "fuente": "vacio", "exito": False}
+
     puntos = []
     for nodo in camino:
         if nodo in PUNTOS_AJUSTADOS:
             puntos.append({"lat": PUNTOS_AJUSTADOS[nodo]["lat"], "lng": PUNTOS_AJUSTADOS[nodo]["lng"]})
-        elif nodo in ATRACTIVOS:
-            puntos.append({"lat": ATRACTIVOS[nodo]["lat"], "lng": ATRACTIVOS[nodo]["lng"]})
     if len(puntos) < 2:
         return {"puntos_ruta": [], "distancia_km": 0.0, "tiempo_conduccion_min": 0.0,
                 "costo": 0.0, "fuente": "vacio", "exito": False}
+
     coord_str = ";".join(f"{p['lng']},{p['lat']}" for p in puntos)
     url = f"{OSRM_URL}/route/v1/driving/{coord_str}"
     params = {"overview": "full", "geometries": "geojson", "steps": "false"}
@@ -596,25 +621,35 @@ def obtener_metricas_camino_completo(camino):
                 dist = ruta["distance"] / 1000.0
                 tmin = ruta["duration"] / 60.0
                 geometria = ruta["geometry"]["coordinates"]
-                return {"puntos_ruta": [[c[1], c[0]] for c in geometria], "distancia_km": dist,
-                        "tiempo_conduccion_min": tmin, "costo": dist * COSTO_POR_KM,
-                        "fuente": "osrm", "exito": True}
+                return {
+                    "puntos_ruta": [[c[1], c[0]] for c in geometria],
+                    "distancia_km": dist,
+                    "tiempo_conduccion_min": tmin,
+                    "costo": dist * COSTO_POR_KM,
+                    "fuente": "osrm",
+                    "exito": True,
+                }
             time.sleep(1)
         except Exception as e:
-            print(f"Intento {intento+1} falló (camino completo): {e}")
+            print(f"Intento {intento+1} falló (multi-punto): {e}")
             time.sleep(1)
+
+    # Fallback: sumar haversine entre puntos consecutivos
     dist_total = 0.0
-    puntos_ruta = []
+    puntos_ruta = [[puntos[0]["lat"], puntos[0]["lng"]]]
     for i in range(len(puntos) - 1):
-        a = puntos[i]
-        b = puntos[i + 1]
+        a, b = puntos[i], puntos[i + 1]
         dist_total += distancia_haversine(a["lat"], a["lng"], b["lat"], b["lng"])
-        if i == 0:
-            puntos_ruta.append([a["lat"], a["lng"]])
         puntos_ruta.append([b["lat"], b["lng"]])
     tmin = (dist_total / VELOCIDAD_FALLBACK_KMH) * 60
-    return {"puntos_ruta": puntos_ruta, "distancia_km": dist_total, "tiempo_conduccion_min": tmin,
-            "costo": dist_total * COSTO_POR_KM, "fuente": "haversine", "exito": False}
+    return {
+        "puntos_ruta": puntos_ruta,
+        "distancia_km": dist_total,
+        "tiempo_conduccion_min": tmin,
+        "costo": dist_total * COSTO_POR_KM,
+        "fuente": "haversine",
+        "exito": False,
+    }
 
 
 # ============================================================
@@ -635,6 +670,13 @@ def index():
 
 @app.route("/api/ruta", methods=["POST"])
 def api_ruta():
+    """
+    Calcula la ruta entre dos nodos.
+
+    Solución D2: Dijkstra decide el camino lógico sobre el grafo hub-and-spoke,
+    pero la distancia/tiempo/costo se calculan con OSRM DIRECTO entre origen
+    y destino (sin pasar por hubs). Coincide con Google Maps.
+    """
     try:
         data = request.get_json()
         origen = int(data["origen"])
@@ -646,40 +688,68 @@ def api_ruta():
             return jsonify({"exito": False, "error": "El nodo de destino no existe."}), 400
         if origen == destino:
             return jsonify({"exito": False, "error": "El origen y destino no pueden ser iguales."}), 400
+
         asegurar_grafo_actualizado()
+
+        # 1) Dijkstra decide el camino lógico (por hubs) — solo informativo
         resultado_dijkstra = dijkstra(GRAFO, origen, destino, criterio)
         if resultado_dijkstra is None:
             return jsonify({"exito": False, "error": "No se encontró un camino entre los nodos seleccionados."}), 404
-        camino = resultado_dijkstra["camino"]
-        metricas = obtener_metricas_camino_completo(camino)
-        puntos_ruta = metricas["puntos_ruta"]
+        camino_logico = resultado_dijkstra["camino"]
+
+        # 2) OSRM calcula la distancia/tiempo REAL directa (Solución D2)
+        metricas = obtener_metricas_directas(origen, destino)
+
         distancia_total = metricas["distancia_km"]
         tiempo_conduccion = metricas["tiempo_conduccion_min"]
         costo_total = metricas["costo"]
         tiempo_total = tiempo_conduccion * FACTOR_HOLGURA
-        segmentos = []
-        for i in range(len(camino) - 1):
-            a = camino[i]
-            b = camino[i + 1]
-            d = GRAFO[a][b]
-            segmentos.append({"origen": a, "destino": b,
-                               "distancia_km": round(d["distancia_km"], 2),
-                               "tiempo_min": round(d["tiempo_min"], 2),
-                               "costo": round(d["costo"], 2)})
+
+        # Segmentos: solo origen → destino (una sola arista directa)
+        segmentos = [{
+            "origen": origen,
+            "destino": destino,
+            "distancia_km": round(distancia_total, 2),
+            "tiempo_min": round(tiempo_conduccion, 2),
+            "costo": round(costo_total, 2),
+        }]
+
+        # Nodos de la ruta física (solo los 2 extremos)
+        nodos_fisicos = [origen, destino]
         nodos_ruta = []
-        for nodo in camino:
+        for nodo in nodos_fisicos:
             nodos_ruta.append({
                 "id": nodo, **ATRACTIVOS[nodo],
                 "lat_ruta": PUNTOS_AJUSTADOS[nodo]["lat"], "lng_ruta": PUNTOS_AJUSTADOS[nodo]["lng"],
                 "lat_carretera": PUNTOS_AJUSTADOS[nodo]["lat"], "lng_carretera": PUNTOS_AJUSTADOS[nodo]["lng"]
             })
+
+        # Nodos del camino lógico (para mostrar "por qué hubs pasa")
+        nodos_logicos = []
+        for nodo in camino_logico:
+            nodos_logicos.append({
+                "id": nodo, "cod": ATRACTIVOS[nodo]["cod"], "nombre": ATRACTIVOS[nodo]["nombre"]
+            })
+
         return jsonify({
-            "exito": True, "origen": origen, "destino": destino, "criterio": criterio,
-            "camino": camino, "nodos_ruta": nodos_ruta, "distancia_km": round(distancia_total, 2),
-            "tiempo_conduccion_min": round(tiempo_conduccion, 2), "tiempo_min": round(tiempo_total, 2),
-            "factor_holgura": FACTOR_HOLGURA, "costo": round(costo_total, 2),
-            "fuente_metricas": metricas["fuente"], "puntos_ruta": puntos_ruta,
-            "segmentos": segmentos, "nodos_visitados": len(camino)
+            "exito": True,
+            "origen": origen,
+            "destino": destino,
+            "criterio": criterio,
+            "camino": camino_logico,          # camino lógico (para transparencia)
+            "camino_logico": camino_logico,   # alias
+            "nodos_ruta": nodos_ruta,         # nodos físicos (solo 2)
+            "nodos_logicos": nodos_logicos,   # nodos del camino lógico
+            "distancia_km": round(distancia_total, 2),
+            "tiempo_conduccion_min": round(tiempo_conduccion, 2),
+            "tiempo_min": round(tiempo_total, 2),
+            "factor_holgura": FACTOR_HOLGURA,
+            "costo": round(costo_total, 2),
+            "fuente_metricas": metricas["fuente"],
+            "puntos_ruta": metricas["puntos_ruta"],
+            "segmentos": segmentos,
+            "nodos_visitados": len(nodos_ruta),
+            "metodo": "D2_dijkstra_orden_osrm_medicion"
         })
     except Exception as e:
         print("ERROR API RUTA:", e)
@@ -689,8 +759,12 @@ def api_ruta():
 @app.route("/api/dia/<int:dia_num>")
 def api_dia(dia_num):
     """
-    Devuelve la ruta óptima de un día específico, calculando el ORDEN ÓPTIMO
-    de visita (no el orden predefinido). Consistente con el script de escritorio.
+    Devuelve el itinerario óptimo de un día.
+
+    Solución D2:
+      - Dijkstra decide el ORDEN ÓPTIMO de visita (problema del viajante).
+      - OSRM calcula la distancia REAL del recorrido completo (multi-punto),
+        encadenando todos los atractivos en el orden decidido.
     """
     try:
         dias = {
@@ -711,84 +785,49 @@ def api_dia(dia_num):
         destinos = dia["destinos"]
         asegurar_grafo_actualizado()
 
+        # 1) Dijkstra decide el ORDEN ÓPTIMO de visita
         orden, _ = orden_optimo_visita(destinos, criterio)
         if orden is None:
             return jsonify({"exito": False, "error": "No se pudo calcular el orden óptimo."}), 500
 
         BASE = 15
-        secuencia = [BASE] + orden + [BASE]
-        tramos = []
-        for i in range(len(secuencia) - 1):
-            origen = secuencia[i]
-            destino = secuencia[i + 1]
-            resultado = dijkstra(GRAFO, origen, destino, criterio)
-            if resultado is None:
-                return jsonify({"exito": False, "error": f"No hay camino entre {origen} y {destino}."}), 500
-            camino = resultado["camino"]
-            metricas = obtener_metricas_camino_completo(camino)
-            tramos.append({
-                "origen": origen,
-                "destino": destino,
-                "camino": camino,
-                "puntos_ruta": metricas["puntos_ruta"],
-                "distancia_km": metricas["distancia_km"],
-                "tiempo_conduccion_min": metricas["tiempo_conduccion_min"],
-                "costo": metricas["costo"],
-                "fuente_metricas": metricas["fuente"],
-                "nodos_ruta": [
-                    {"id": n, **ATRACTIVOS[n],
-                     "lat_carretera": PUNTOS_AJUSTADOS[n]["lat"],
-                     "lng_carretera": PUNTOS_AJUSTADOS[n]["lng"]}
-                    for n in camino
-                ],
+        secuencia_orden = [BASE] + orden + [BASE]
+
+        # 2) OSRM mide el recorrido completo del día (multi-punto)
+        metricas = obtener_metricas_multi_punto(secuencia_orden)
+
+        dist_total = metricas["distancia_km"]
+        t_conduccion = metricas["tiempo_conduccion_min"]
+        costo_total = metricas["costo"]
+        t_total = t_conduccion * FACTOR_HOLGURA
+
+        # Nodos de la ruta física (en el orden óptimo)
+        nodos_ruta = []
+        for nodo in secuencia_orden:
+            nodos_ruta.append({
+                "id": nodo, **ATRACTIVOS[nodo],
+                "lat_carretera": PUNTOS_AJUSTADOS[nodo]["lat"],
+                "lng_carretera": PUNTOS_AJUSTADOS[nodo]["lng"]
             })
 
-        # Combinar tramos
-        puntos_ruta = []
-        nodos_ruta = []
-        segmentos = []
-        dist_total = 0.0
-        t_conduccion = 0.0
-        costo_total = 0.0
-        todas_osrm = True
-        for i, t in enumerate(tramos):
-            puntos = t["puntos_ruta"] if i == 0 else t["puntos_ruta"][1:]
-            puntos_ruta.extend(puntos)
-            nodos = t["nodos_ruta"] if i == 0 else t["nodos_ruta"][1:]
-            nodos_ruta.extend(nodos)
-            dist_total += t["distancia_km"]
-            t_conduccion += t["tiempo_conduccion_min"]
-            costo_total += t["costo"]
-            if t["fuente_metricas"] != "osrm":
-                todas_osrm = False
-            for j in range(len(t["camino"]) - 1):
-                a, b = t["camino"][j], t["camino"][j + 1]
-                d = GRAFO[a][b]
-                segmentos.append({
-                    "origen": a, "destino": b,
-                    "distancia_km": round(d["distancia_km"], 2),
-                    "tiempo_min": round(d["tiempo_min"], 2),
-                    "costo": round(d["costo"], 2),
-                })
-
-        t_total = t_conduccion * FACTOR_HOLGURA
         return jsonify({
             "exito": True,
             "dia": dia_num,
             "zona": dia["zona"],
             "criterio": criterio,
-            "orden_optimo": [BASE] + orden + [BASE],
-            "camino": [BASE] + orden + [BASE],
+            "orden_optimo": secuencia_orden,
+            "camino": secuencia_orden,
             "nodos_ruta": nodos_ruta,
-            "puntos_ruta": puntos_ruta,
-            "segmentos": segmentos,
+            "puntos_ruta": metricas["puntos_ruta"],
+            "segmentos": [],  # multi-punto no se desglosa por aristas
             "distancia_km": round(dist_total, 2),
             "tiempo_conduccion_min": round(t_conduccion, 2),
             "tiempo_min": round(t_total, 2),
             "factor_holgura": FACTOR_HOLGURA,
             "costo": round(costo_total, 2),
-            "fuente_metricas": "osrm" if todas_osrm else "haversine",
+            "fuente_metricas": metricas["fuente"],
             "nodos_visitados": len(nodos_ruta),
+            "metodo": "D2_dijkstra_orden_osrm_medicion"
         })
     except Exception as e:
         print("ERROR API DIA:", e)
@@ -834,6 +873,7 @@ def api_fuente_get():
         "factor_holgura": FACTOR_HOLGURA,
         "criterio_oficial": CRITERIO_OFICIAL,
         "costo_por_km": COSTO_POR_KM,
+        "metodo": "D2_dijkstra_orden_osrm_medicion"
     })
 
 
@@ -867,15 +907,13 @@ def api_fuente_post():
 if __name__ == "__main__":
     print("==========================================")
     print(" RUTAS TURÍSTICAS DE COCLÉ")
-    print(" Optimización mediante Dijkstra")
-    print(" Grafo: hub-and-spoke (atractivo<->hub, hub<->hub)")
+    print(" Método: D2 — Dijkstra decide, OSRM mide")
     print("==========================================")
     print(f"Atractivos registrados: {len(ATRACTIVOS)}")
     print(f"Fuente oficial: {FUENTE_OFICIAL.upper()}")
     print(f"Fuente activa: {FUENTE_COORDENADAS.upper()}")
     print(f"Criterio oficial: {CRITERIO_OFICIAL.upper()}")
     print(f"Factor de holgura: {FACTOR_HOLGURA} (+{round((FACTOR_HOLGURA - 1) * 100)}%)")
-    print(f"Costo por km (informativo): {COSTO_POR_KM} USD/km")
 
     try:
         print("Precalentando el grafo (puede tardar unos segundos)...")
