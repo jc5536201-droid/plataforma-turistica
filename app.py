@@ -11,7 +11,7 @@ medida con OSRM sobre OpenStreetMap.
 
   • 29 nodos → 406 aristas (i < j).
   • Cada arista se consulta UNA VEZ a OSRM.
-  • Los resultados se guardan en cache_aristas_<fuente>.json.
+  • Los resultados se guardan en cache/cache_aristas_<fuente>.json.
   • Primer arranque: ~5-10 min construyendo la caché.
   • Arranques siguientes: instantáneo (lee el JSON).
 
@@ -21,19 +21,6 @@ real de conducción. Camino y distancia son coherentes.
 
 Las distancias coinciden con Google Maps dentro de la tolerancia
 esperada entre proveedores de ruteo (±5-10%).
-
-═══════════════════════════════════════════════════════════════════════════════
-FLUJO
-═══════════════════════════════════════════════════════════════════════════════
-1. Arranque:
-   - Si existe cache_aristas_<fuente>.json → cargar.
-   - Si no → construir consultando OSRM y guardar.
-2. /api/ruta:
-   - Dijkstra sobre grafo completo.
-   - Devuelve camino + distancia real del camino.
-3. /api/dia/<n>:
-   - Dijkstra (fuerza bruta) para el orden óptimo de visita.
-   - Suma las aristas del orden → distancia real.
 
 ═══════════════════════════════════════════════════════════════════════════════
 FUENTE OFICIAL DE COORDENADAS
@@ -70,7 +57,6 @@ FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.25"))
 CRITERIO_OFICIAL = "distancia"
 FUENTE_OFICIAL = "google"
 
-# Directorio y archivo de caché
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -379,12 +365,7 @@ def ajustar_puntos_a_carreteras():
 
 
 def construir_grafo_completo(puntos):
-    """
-    Construye un grafo COMPLETO: cada par (i, j) con i < j
-    tiene una arista con distancia/tiempo/costo medidos con OSRM.
-
-    29 nodos → 406 aristas → 406 consultas a OSRM.
-    """
+    """Construye grafo completo: 29 nodos → 406 aristas."""
     global _progreso_cache
     grafo = {nodo: {} for nodo in puntos}
     nodos = sorted(puntos.keys())
@@ -407,7 +388,6 @@ def construir_grafo_completo(puntos):
             p_a = puntos[a]
             p_b = puntos[b]
 
-            # Intentar OSRM
             resultado = obtener_ruta_osrm(p_a["lat"], p_a["lng"], p_b["lat"], p_b["lng"])
             if resultado.get("exito"):
                 datos = {
@@ -422,7 +402,6 @@ def construir_grafo_completo(puntos):
             grafo[a][b] = datos
             grafo[b][a] = datos
 
-            # Progreso cada 20 aristas
             if hechas % 20 == 0 or hechas == total_aristas:
                 pct = hechas / total_aristas * 100
                 transcurrido = time.time() - _progreso_cache["inicio"]
@@ -440,7 +419,6 @@ def construir_grafo_completo(puntos):
 
 
 def guardar_cache(grafo, puntos):
-    """Guarda el grafo y los puntos ajustados en JSON."""
     path = ruta_cache_path(FUENTE_COORDENADAS)
     payload = {
         "fuente": FUENTE_COORDENADAS,
@@ -456,7 +434,6 @@ def guardar_cache(grafo, puntos):
 
 
 def cargar_cache():
-    """Intenta cargar el grafo desde caché. Devuelve (grafo, puntos) o (None, None)."""
     path = ruta_cache_path(FUENTE_COORDENADAS)
     if not os.path.exists(path):
         return None, None
@@ -466,16 +443,8 @@ def cargar_cache():
         if payload.get("fuente") != FUENTE_COORDENADAS:
             print(f"  ⚠ Caché existe pero es de otra fuente ({payload.get('fuente')}). Se ignora.")
             return None, None
-        # Reconstruir con claves int
         puntos = {int(k): v for k, v in payload["puntos"].items()}
         grafo = {int(k): {int(kk): vv for kk, vv in v.items()} for k, v in payload["grafo"].items()}
-        # Validar que las coordenadas ajustadas coincidan con las actuales
-        for nodo, datos in puntos.items():
-            if nodo in ATRACTIVOS:
-                # Solo verificamos que el lat/lng ajustado sea el mismo
-                if abs(datos.get("lat", 0) - puntos[nodo].get("lat", 0)) > 1e-6:
-                    print(f"  ⚠ Caché desactualizada para nodo {nodo}. Se reconstruye.")
-                    return None, None
         return grafo, puntos
     except Exception as e:
         print(f"  ⚠ Error cargando caché: {e}. Se reconstruye.")
@@ -483,7 +452,6 @@ def cargar_cache():
 
 
 def preparar_grafo(force_rebuild=False):
-    """Prepara el grafo: carga caché o reconstruye."""
     global GRAFO, PUNTOS_AJUSTADOS, FUENTE_GRAFO, CACHE_CARGADO
 
     if not force_rebuild:
@@ -497,7 +465,6 @@ def preparar_grafo(force_rebuild=False):
                   f"{sum(len(v) for v in GRAFO.values()) // 2} aristas (instantáneo).")
             return
 
-    # Construcción desde cero
     print("  Sin caché disponible. Construyendo grafo completo...")
     print("  ⏳ Esto puede tardar ~5-10 min la primera vez. Se guardará en caché.")
     PUNTOS_AJUSTADOS = ajustar_puntos_a_carreteras()
@@ -560,11 +527,6 @@ def dijkstra(grafo, origen, destino, criterio):
 
 
 def orden_optimo_visita(destinos, criterio="distancia"):
-    """
-    Encuentra el orden óptimo de visita (TSP) usando el grafo completo.
-    Como el grafo ya tiene todas las aristas reales, no hace falta matriz
-    separada: se leen directamente de GRAFO.
-    """
     BASE = 15
     destinos_sin_base = [d for d in destinos if d != BASE]
     if not destinos_sin_base:
@@ -598,10 +560,8 @@ def orden_optimo_visita(destinos, criterio="distancia"):
 
 
 def metricas_camino(camino):
-    """Suma las aristas del camino. Como el grafo es completo, cada tramo
-    es una ruta real medida con OSRM."""
     if not camino or len(camino) < 2:
-        return {"distancia_km": 0.0, "tiempo_conduccion_min": 0.0, "costo": 0.0}
+        return {"distancia_km": 0.0, "tiempo_conduccion_min": 0.0, "costo": 0.0, "segmentos": []}
     d = t = c = 0.0
     segmentos = []
     for i in range(len(camino) - 1):
@@ -616,12 +576,7 @@ def metricas_camino(camino):
             "tiempo_min": round(arista["tiempo_min"], 2),
             "costo": round(arista["costo"], 2),
         })
-    return {
-        "distancia_km": d,
-        "tiempo_conduccion_min": t,
-        "costo": c,
-        "segmentos": segmentos
-    }
+    return {"distancia_km": d, "tiempo_conduccion_min": t, "costo": c, "segmentos": segmentos}
 
 
 # ============================================================
@@ -726,7 +681,6 @@ def api_dia(dia_num):
         BASE = 15
         secuencia = [BASE] + orden + [BASE]
 
-        # Sumar aristas del camino
         dist_total = 0.0
         t_conduccion = 0.0
         costo_total = 0.0
@@ -747,7 +701,6 @@ def api_dia(dia_num):
                 "lng_carretera": PUNTOS_AJUSTADOS[nodo]["lng"]
             })
 
-        # Segmentos
         segmentos = []
         for i in range(len(secuencia) - 1):
             a, b = secuencia[i], secuencia[i + 1]
@@ -782,6 +735,61 @@ def api_dia(dia_num):
         return jsonify({"exito": False, "error": str(e)}), 500
 
 
+@app.route("/api/geometria", methods=["POST"])
+def api_geometria():
+    """
+    Devuelve la geometría (lista de [lat, lng]) de la ruta real por
+    carretera entre los nodos de un camino. Se usa solo para dibujar
+    la línea en el mapa; las distancias ya están en el grafo completo.
+    """
+    try:
+        data = request.get_json() or {}
+        camino = data.get("camino", [])
+        if not isinstance(camino, list) or len(camino) < 2:
+            return jsonify({"exito": False, "error": "Camino inválido"}), 400
+
+        asegurar_grafo_actualizado()
+
+        # Convertir IDs a int por si vienen como string
+        camino = [int(n) for n in camino]
+
+        puntos = []
+        for n in camino:
+            if n in PUNTOS_AJUSTADOS:
+                puntos.append((PUNTOS_AJUSTADOS[n]["lat"], PUNTOS_AJUSTADOS[n]["lng"]))
+        if len(puntos) < 2:
+            return jsonify({"exito": False, "error": "Puntos insuficientes"}), 400
+
+        coord_str = ";".join(f"{lng},{lat}" for lat, lng in puntos)
+        url = f"{OSRM_URL}/route/v1/driving/{coord_str}"
+        params = {"overview": "full", "geometries": "geojson", "steps": "false"}
+
+        for intento in range(MAX_RETRIES):
+            try:
+                r = requests.get(url, params=params, timeout=TIMEOUT)
+                d = r.json()
+                if r.status_code == 200 and d.get("code") == "Ok":
+                    geom = d["routes"][0]["geometry"]["coordinates"]
+                    return jsonify({
+                        "exito": True,
+                        "puntos_ruta": [[c[1], c[0]] for c in geom]
+                    })
+                time.sleep(1)
+            except Exception as e:
+                print(f"Intento {intento+1} falló (geometría): {e}")
+                time.sleep(1)
+
+        # Fallback: línea recta entre nodos
+        return jsonify({
+            "exito": True,
+            "puntos_ruta": [[lat, lng] for lat, lng in puntos],
+            "aproximado": True
+        })
+    except Exception as e:
+        print("ERROR API GEOMETRIA:", e)
+        return jsonify({"exito": False, "error": str(e)}), 500
+
+
 @app.route("/api/coordenadas")
 def api_coordenadas():
     asegurar_grafo_actualizado()
@@ -789,7 +797,8 @@ def api_coordenadas():
     for nodo, datos in PUNTOS_AJUSTADOS.items():
         resultado[nodo] = {
             "nombre": datos["nombre"], "cod": datos["cod"], "tipo": datos["tipo"],
-            "lat": datos.get("lat_original", datos["lat"]), "lng": datos.get("lng_original", datos["lng"]),
+            "lat": datos.get("lat_original", datos["lat"]),
+            "lng": datos.get("lng_original", datos["lng"]),
             "lat_original": datos.get("lat_original", datos["lat"]),
             "lng_original": datos.get("lng_original", datos["lng"]),
             "lat_carretera": datos["lat"], "lng_carretera": datos["lng"]
@@ -860,7 +869,6 @@ def api_fuente_post():
 
 @app.route("/api/cache/estado")
 def api_cache_estado():
-    """Endpoint para saber el estado del caché."""
     return jsonify({
         "estado": _progreso_cache["estado"],
         "hechas": _progreso_cache["hechas"],
@@ -876,16 +884,12 @@ def api_cache_estado():
 
 @app.route("/api/cache/reconstruir", methods=["POST"])
 def api_cache_reconstruir():
-    """Reconstruye el caché desde cero."""
     try:
-        # Borrar caché existente
         path = ruta_cache_path(FUENTE_COORDENADAS)
         if os.path.exists(path):
             os.remove(path)
-
         with _lock_grafo:
             preparar_grafo(force_rebuild=True)
-
         return jsonify({
             "exito": True,
             "nodos": len(GRAFO),
