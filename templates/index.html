@@ -134,6 +134,7 @@
             transition: all 0.3s ease;
             background: white;
             font-size: 0.9rem;
+            user-select: none;
         }
 
         .criterio-badge:hover { transform: scale(1.05); }
@@ -141,6 +142,18 @@
             border-color: var(--verde);
             background: rgba(29,158,117,0.1);
             color: var(--verde);
+        }
+
+        /* Badge de criterio informativo (costo) */
+        .criterio-badge.informativo {
+            background: #f5f5f5;
+            color: #888;
+            cursor: help;
+            opacity: 0.75;
+        }
+        .criterio-badge.informativo:hover {
+            transform: none;
+            background: #eeeeee;
         }
 
         /* PANEL */
@@ -254,6 +267,15 @@
             background: #fff;
         }
 
+        .badge-oficial {
+            background: #27AE60;
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 4px;
+        }
+
         .btn-calcular {
             background: linear-gradient(135deg, var(--verde), #157a5a);
             color: white;
@@ -283,6 +305,17 @@
 
         .btn-geojson:hover { transform: scale(1.02); color: white; }
 
+        /* Aviso informativo */
+        .aviso-informativo {
+            background: #FFF9E6;
+            border-left: 4px solid #F39C12;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            color: #7a5c00;
+            margin-bottom: 15px;
+        }
+
         @media (max-width: 768px) {
             #mapa { height: 320px; }
             .stat-card .numero { font-size: 1.3rem; }
@@ -309,18 +342,20 @@
                     ·
                     <span class="badge-dijkstra">Dijkstra</span>
                     <span class="badge-api">OSRM + OpenStreetMap</span>
-                    <span class="badge-fuente" id="badgeFuente" title="Fuente de coordenadas activa">
+                    <span class="badge-fuente" id="badgeFuente"
+                          title="Fuente de coordenadas activa. La oficial del proyecto es Google Maps.">
                         <i class="fas fa-map-pin"></i>
                         <select id="fuenteSelect" onchange="cambiarFuente(this.value)">
-                            <option value="google">Google Maps</option>
-                            <option value="osm">OpenStreetMap</option>
+                            <option value="google">Google Maps (oficial)</option>
+                            <option value="osm">OpenStreetMap (sensibilidad)</option>
                         </select>
                     </span>
                 </p>
             </div>
             <div class="col-md-5 text-md-end mt-3 mt-md-0">
                 <div class="harpia-box">
-                    <span class="harpia" id="harpia" title="¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá. Haz clic para escuchar la ruta.">🦅</span>
+                    <span class="harpia" id="harpia"
+                          title="¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá. Haz clic para escuchar la ruta.">🦅</span>
                     <button class="btn-harpia" id="btnHarpia" onclick="hablarHarpia()">
                         <i class="fas fa-volume-up me-2"></i>
                         <span id="harpiaTexto">Hablar con la Harpía</span>
@@ -333,6 +368,18 @@
 
 <!-- CONTENIDO -->
 <main class="container py-4">
+
+    <!-- AVISO METODOLÓGICO -->
+    <div class="aviso-informativo">
+        <i class="fas fa-info-circle me-1"></i>
+        <strong>Criterio oficial: DISTANCIA.</strong>
+        El sistema permite explorar además Tiempo (con velocidades reales de OSRM) y
+        Costo como métricas informativas. El costo se calcula como
+        distancia × {{ "%.2f"|format(0.15) }} USD/km (tarifa uniforme), por lo que
+        <strong>coincide con la ruta por distancia</strong> y se reporta solo como
+        dato de apoyo al turista.
+        <span id="avisoHolgura"></span>
+    </div>
 
     <!-- ESTADÍSTICAS -->
     <div class="row g-3 mb-4">
@@ -350,7 +397,7 @@
                 <i class="fas fa-clock icono" style="color:var(--azul);"></i>
                 <div>
                     <div class="numero" id="totalTiempo">--</div>
-                    <div class="etiqueta">Tiempo estimado</div>
+                    <div class="etiqueta">Tiempo total</div>
                 </div>
             </div>
         </div>
@@ -393,14 +440,21 @@
                 <i class="fas fa-sliders-h text-primary me-1"></i> Criterio de optimización
             </label>
             <div class="d-flex gap-2 flex-wrap">
-                <span class="criterio-badge active" data-criterio="distancia" onclick="seleccionarCriterio('distancia')">
+                <span class="criterio-badge active" data-criterio="distancia"
+                      onclick="seleccionarCriterio('distancia')"
+                      title="Criterio oficial del proyecto">
                     <i class="fas fa-ruler"></i> Distancia
                 </span>
-                <span class="criterio-badge" data-criterio="tiempo" onclick="seleccionarCriterio('tiempo')">
+                <span class="criterio-badge" data-criterio="tiempo"
+                      onclick="seleccionarCriterio('tiempo')"
+                      title="Velocidades reales de OSRM">
                     <i class="fas fa-clock"></i> Tiempo
                 </span>
-                <span class="criterio-badge" data-criterio="costo" onclick="seleccionarCriterio('costo')">
+                <span class="criterio-badge informativo" data-criterio="costo"
+                      onclick="seleccionarCriterio('costo')"
+                      title="Costo = distancia × 0.15 USD/km. Al ser lineal, produce la misma ruta que Distancia. Se reporta como métrica informativa.">
                     <i class="fas fa-dollar-sign"></i> Costo
+                    <i class="fas fa-info-circle ms-1" style="font-size:0.7em;"></i>
                 </span>
             </div>
         </div>
@@ -414,11 +468,13 @@
                     <i class="fas fa-route me-2"></i>
                     Calcular Ruta Óptima con Dijkstra
                 </button>
-                <button class="btn-geojson" onclick="cargarGeoJSON()" style="width: auto; padding: 14px 25px; margin-top: 0;">
+                <button class="btn-geojson" onclick="cargarGeoJSON()"
+                        style="width: auto; padding: 14px 25px; margin-top: 0;">
                     <i class="fas fa-file-upload me-2"></i>
                     Cargar GeoJSON
                 </button>
-                <input type="file" id="fileInput" accept=".geojson,.json" style="display:none" onchange="procesarGeoJSON(event)">
+                <input type="file" id="fileInput" accept=".geojson,.json"
+                       style="display:none" onchange="procesarGeoJSON(event)">
             </div>
             <div id="mapa"></div>
         </div>
@@ -445,6 +501,11 @@
         <i class="fas fa-calendar-alt text-success me-2"></i>
         Itinerario de 7 Días
     </h3>
+    <p class="text-center text-muted small mb-4">
+        <i class="fas fa-info-circle me-1"></i>
+        Cada día calcula el <strong>orden óptimo de visita</strong> (partiendo y
+        volviendo a Penonomé) con el criterio seleccionado.
+    </p>
     <div class="row g-3" id="diasContainer"></div>
 
 </main>
@@ -474,7 +535,13 @@
 
 <script>
 const ATRACTIVOS = {{ atractivos|tojson }};
-let criterioActual = 'distancia';
+const CONFIG = {
+    fuenteActual: "{{ fuente_actual }}",
+    fuenteOficial: "{{ fuente_oficial }}",
+    factorHolgura: {{ factor_holgura }},
+    criterioOficial: "{{ criterio_oficial }}"
+};
+let criterioActual = CONFIG.criterioOficial;
 let mapa = null;
 let rutaLayer = null;
 let rutaGeoJSONLayer = null;
@@ -498,36 +565,25 @@ function initMapa() {
 
 function agregarMarcadores() {
     const colores = {
-        'Playa': '#2E86C1',
-        'Cultural': '#F39C12',
-        'Cultural/Hist.': '#F39C12',
-        'Histórico': '#F39C12',
-        'Naturaleza': '#8E44AD',
-        'Parque Nacional': '#27AE60',
-        'Cascada': '#2980B9',
-        'Balneario': '#1ABC9C',
-        'Arqueológico': '#C0392B',
-        'Montaña': '#27AE60',
-        'Aventura': '#E67E22',
-        'Hub/Ciudad': '#1D9E75'
+        'Playa': '#2E86C1', 'Cultural': '#F39C12', 'Cultural/Hist.': '#F39C12',
+        'Histórico': '#F39C12', 'Naturaleza': '#8E44AD',
+        'Parque Nacional': '#27AE60', 'Cascada': '#2980B9',
+        'Balneario': '#1ABC9C', 'Arqueológico': '#C0392B',
+        'Montaña': '#27AE60', 'Aventura': '#E67E22', 'Hub/Ciudad': '#1D9E75'
     };
-
     for (const [id, data] of Object.entries(ATRACTIVOS)) {
         const color = colores[data.tipo] || '#6c757d';
         const marker = L.marker([data.lat, data.lng], {
             icon: L.divIcon({
                 html: `<div style="background:${color};width:28px;height:28px;border-radius:50%;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;color:white;">${data.cod}</div>`,
-                iconSize: [28,28],
-                iconAnchor: [14,14]
+                iconSize: [28, 28], iconAnchor: [14, 14]
             })
         }).addTo(mapa);
-
         marker.bindPopup(`
             <strong>${data.nombre}</strong><br>
             <span class="badge bg-secondary">${data.tipo}</span><br>
             <small>Código: ${data.cod}</small>
         `);
-
         marker.on('click', function() {
             document.getElementById('destinoSelect').value = id;
             calcularRuta();
@@ -536,7 +592,7 @@ function agregarMarcadores() {
 }
 
 // ============================================================
-// SELECTORES
+// SELECTORES Y CRITERIOS
 // ============================================================
 
 function llenarSelectores() {
@@ -558,6 +614,16 @@ function llenarSelectores() {
 }
 
 function seleccionarCriterio(criterio) {
+    if (criterio === 'costo') {
+        // Aviso explícito: costo = distancia × tarifa uniforme
+        const continuar = confirm(
+            "ℹ️ El criterio COSTO usa una tarifa uniforme (distancia × 0.15 USD/km).\n\n" +
+            "Por eso produce la MISMA ruta que DISTANCIA. Se reporta como métrica " +
+            "informativa, no como criterio independiente.\n\n" +
+            "¿Deseas continuar?"
+        );
+        if (!continuar) return;
+    }
     criterioActual = criterio;
     document.querySelectorAll('.criterio-badge').forEach(el => {
         el.classList.toggle('active', el.dataset.criterio === criterio);
@@ -622,9 +688,13 @@ async function calcularRutaDirecta(origen, destino) {
         const destinoCoords = coordData[destino];
         if (!origenCoords || !destinoCoords) throw new Error('No se encontraron coordenadas');
         const dist = calcularDistanciaHaversine(
-            origenCoords.lat_carretera || origenCoords.lat, origenCoords.lng_carretera || origenCoords.lng,
-            destinoCoords.lat_carretera || destinoCoords.lat, destinoCoords.lng_carretera || destinoCoords.lng
+            origenCoords.lat_carretera || origenCoords.lat,
+            origenCoords.lng_carretera || origenCoords.lng,
+            destinoCoords.lat_carretera || destinoCoords.lat,
+            destinoCoords.lng_carretera || destinoCoords.lng
         );
+        const tCond = dist / 40 * 60;
+        const tTotal = tCond * CONFIG.factorHolgura;
         return {
             exito: true,
             camino: [origen, destino],
@@ -633,15 +703,19 @@ async function calcularRutaDirecta(origen, destino) {
                 { ...ATRACTIVOS[destino], id: destino }
             ],
             distancia_km: dist,
-            tiempo_min: Math.round(dist / 40 * 60),
+            tiempo_conduccion_min: tCond,
+            tiempo_min: tTotal,
+            factor_holgura: CONFIG.factorHolgura,
             costo: dist * 0.15,
             puntos_ruta: generarPuntosIntermedios(
-                origenCoords.lat_carretera || origenCoords.lat, origenCoords.lng_carretera || origenCoords.lng,
-                destinoCoords.lat_carretera || destinoCoords.lat, destinoCoords.lng_carretera || destinoCoords.lng
+                origenCoords.lat_carretera || origenCoords.lat,
+                origenCoords.lng_carretera || origenCoords.lng,
+                destinoCoords.lat_carretera || destinoCoords.lat,
+                destinoCoords.lng_carretera || destinoCoords.lng
             ),
             segmentos: [{
                 origen: origen, destino: destino,
-                distancia_km: dist, tiempo_min: Math.round(dist / 40 * 60), costo: dist * 0.15
+                distancia_km: dist, tiempo_min: tCond, costo: dist * 0.15
             }],
             criterio: criterioActual,
             fuente_metricas: 'haversine',
@@ -724,11 +798,12 @@ function actualizarEstadisticas(data) {
 function actualizarPanel(data) {
     const panel = document.getElementById('panelRuta');
     const nombresCriterio = {
-        distancia: 'Distancia mínima', tiempo: 'Tiempo mínimo', costo: 'Costo mínimo'
+        distancia: 'Distancia mínima',
+        tiempo: 'Tiempo mínimo',
+        costo: 'Costo (métrica informativa — equivale a distancia)'
     };
     const nombreCriterio = nombresCriterio[data.criterio] || data.criterio || 'Criterio seleccionado';
 
-    // Badge de fuente de métricas
     const fuenteMetricas = data.fuente_metricas || 'osrm';
     const badgeMetricas = fuenteMetricas === 'osrm'
         ? `<span class="badge bg-success ms-1" title="Métricas calculadas por OSRM (ruta completa encadenada)">
@@ -738,6 +813,18 @@ function actualizarPanel(data) {
               <i class="fas fa-exclamation-triangle me-1"></i>Métricas: aproximadas
            </span>`;
 
+    // Desglose de tiempo
+    const tCond = Number(data.tiempo_conduccion_min || data.tiempo_min || 0);
+    const tTotal = Number(data.tiempo_min || tCond);
+    const holgura = tTotal - tCond;
+    let desgloseTiempo = "";
+    if (holgura > 0.1) {
+        desgloseTiempo = `<div class="small text-muted mt-1">
+            <i class="fas fa-info-circle me-1"></i>
+            ${tCond.toFixed(0)} min conducción + ${holgura.toFixed(0)} min holgura (×${CONFIG.factorHolgura})
+        </div>`;
+    }
+
     let html = `
         <h6 class="fw-bold text-success mb-3">
             <i class="fas fa-route me-2"></i>
@@ -746,13 +833,17 @@ function actualizarPanel(data) {
 
         <div class="mb-2">${badgeMetricas}</div>
 
-        <div class="alert alert-light border"><strong>Criterio:</strong> ${nombreCriterio}</div>
+        <div class="alert alert-light border mb-2">
+            <strong>Criterio:</strong> ${nombreCriterio}
+        </div>
+
         <div class="mb-3">
             <div class="d-flex justify-content-between">
                 <span><i class="fas fa-road text-success"></i> ${Number(data.distancia_km).toFixed(2)} km</span>
                 <span><i class="fas fa-clock text-primary"></i> ${Number(data.tiempo_min).toFixed(0)} min</span>
                 <span><i class="fas fa-dollar-sign text-warning"></i> $${Number(data.costo).toFixed(2)}</span>
             </div>
+            ${desgloseTiempo}
         </div>
         <div class="border-top pt-3">
             <p class="mb-1"><strong>Origen:</strong> ${data.nodos_ruta?.[0]?.nombre || 'No disponible'}</p>
@@ -814,7 +905,8 @@ function procesarGeoJSON(event) {
                 marcadoresRuta = [];
 
                 rutaGeoJSONLayer = L.polyline(puntos_ruta, {
-                    color: '#E74C3C', weight: 5, opacity: 0.9, dashArray: '10, 10', lineJoin: 'round'
+                    color: '#E74C3C', weight: 5, opacity: 0.9,
+                    dashArray: '10, 10', lineJoin: 'round'
                 }).addTo(mapa);
                 const bounds = rutaGeoJSONLayer.getBounds();
                 if (bounds.isValid()) mapa.fitBounds(bounds, { padding: [50, 50] });
@@ -826,8 +918,10 @@ function procesarGeoJSON(event) {
                         puntos_ruta[i+1][0], puntos_ruta[i+1][1]
                     );
                 }
+                const tCond = distanciaTotal / 40 * 60;
+                const tTotal = tCond * CONFIG.factorHolgura;
                 document.getElementById('totalDistancia').textContent = `${distanciaTotal.toFixed(2)} km`;
-                document.getElementById('totalTiempo').textContent = `${Math.round(distanciaTotal / 40 * 60)} min`;
+                document.getElementById('totalTiempo').textContent = `${Math.round(tTotal)} min`;
                 document.getElementById('totalCosto').textContent = `$${(distanciaTotal * 0.15).toFixed(2)}`;
                 document.getElementById('totalParadas').textContent = `GeoJSON`;
 
@@ -839,7 +933,7 @@ function procesarGeoJSON(event) {
                     <div class="mb-3">
                         <div class="d-flex justify-content-between">
                             <span><i class="fas fa-road text-success"></i> ${distanciaTotal.toFixed(2)} km</span>
-                            <span><i class="fas fa-clock text-primary"></i> ${Math.round(distanciaTotal / 40 * 60)} min</span>
+                            <span><i class="fas fa-clock text-primary"></i> ${Math.round(tTotal)} min</span>
                             <span><i class="fas fa-dollar-sign text-warning"></i> $${(distanciaTotal * 0.15).toFixed(2)}</span>
                         </div>
                     </div>
@@ -917,7 +1011,9 @@ function hablarHarpia() {
         const costo = Number(ultimaRuta.costo).toFixed(2);
 
         const nombresCriterio = {
-            distancia: 'distancia mínima', tiempo: 'tiempo mínimo', costo: 'costo mínimo'
+            distancia: 'distancia mínima',
+            tiempo: 'tiempo mínimo',
+            costo: 'costo mínimo, que equivale a distancia mínima porque usamos una tarifa uniforme'
         };
         const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
 
@@ -980,7 +1076,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-// DÍAS
+// DÍAS — AHORA USA EL ENDPOINT /api/dia/<n> QUE OPTIMIZA EL ORDEN
 // ============================================================
 
 async function cargarDias() {
@@ -1011,33 +1107,23 @@ async function cargarDias() {
 }
 
 async function cargarDia(diaNum) {
-    if (!DIAS_CACHE) return;
-    const dia = DIAS_CACHE.find(d => d.dia === diaNum);
-    if (!dia || !Array.isArray(dia.destinos) || dia.destinos.length < 2) return;
-    const destinos = dia.destinos;
-    document.getElementById('origenSelect').value = destinos[0];
-    document.getElementById('destinoSelect').value = destinos[destinos.length - 1];
-
     document.getElementById('panelRuta').innerHTML = `
         <div class="text-center py-4">
             <div class="spinner-border text-success" role="status"></div>
-            <p class="mt-3 mb-1">Calculando itinerario del día ${diaNum}...</p>
-            <small class="text-muted">Encadenando Dijkstra entre ${destinos.length} atractivos</small>
+            <p class="mt-3 mb-1">Calculando itinerario óptimo del día ${diaNum}...</p>
+            <small class="text-muted">Resolviendo orden de visita por fuerza bruta + Dijkstra</small>
         </div>
     `;
 
     try {
-        const tramos = [];
-        for (let i = 0; i < destinos.length - 1; i++) {
-            const tramo = await obtenerRutaDijkstra(destinos[i], destinos[i + 1], criterioActual);
-            tramos.push(tramo);
-        }
-        const dataCombinada = combinarTramos(tramos);
-        ultimaRuta = dataCombinada;
+        const respuesta = await fetch(`/api/dia/${diaNum}?criterio=${criterioActual}`);
+        const data = await respuesta.json();
+        if (!respuesta.ok || !data.exito) throw new Error(data.error || 'No se pudo calcular el día');
+        ultimaRuta = data;
         if (rutaGeoJSONLayer) { mapa.removeLayer(rutaGeoJSONLayer); rutaGeoJSONLayer = null; }
-        dibujarRuta(dataCombinada);
-        actualizarEstadisticas(dataCombinada);
-        actualizarPanel(dataCombinada);
+        dibujarRuta(data);
+        actualizarEstadisticas(data);
+        actualizarPanelDia(data);
     } catch (error) {
         console.error('Error calculando itinerario:', error);
         document.getElementById('panelRuta').innerHTML = `
@@ -1046,37 +1132,49 @@ async function cargarDia(diaNum) {
     }
 }
 
-function combinarTramos(tramos) {
-    const puntos_ruta = [], nodos_ruta = [], segmentos = [];
-    let distancia_km = 0, tiempo_min = 0, costo = 0;
-    let todasOsrm = true;
+function actualizarPanelDia(data) {
+    const panel = document.getElementById('panelRuta');
+    const tCond = Number(data.tiempo_conduccion_min || 0);
+    const tTotal = Number(data.tiempo_min || 0);
+    const holgura = tTotal - tCond;
 
-    tramos.forEach((tramo, i) => {
-        const puntos = i === 0 ? tramo.puntos_ruta : tramo.puntos_ruta.slice(1);
-        puntos_ruta.push(...puntos);
-        const nodos = i === 0 ? tramo.nodos_ruta : tramo.nodos_ruta.slice(1);
-        nodos_ruta.push(...nodos);
-        segmentos.push(...(tramo.segmentos || []));
-        distancia_km += Number(tramo.distancia_km) || 0;
-        tiempo_min += Number(tramo.tiempo_min) || 0;
-        costo += Number(tramo.costo) || 0;
-
-        if ((tramo.fuente_metricas || 'osrm') !== 'osrm') {
-            todasOsrm = false;
-        }
-    });
-
-    return {
-        exito: true,
-        puntos_ruta,
-        nodos_ruta,
-        segmentos,
-        distancia_km,
-        tiempo_min,
-        costo,
-        criterio: criterioActual,
-        fuente_metricas: todasOsrm ? 'osrm' : 'haversine'
-    };
+    let html = `
+        <h6 class="fw-bold text-success mb-3">
+            <i class="fas fa-calendar-day me-2"></i>
+            Día ${data.dia} <span class="badge bg-success ms-2">Orden óptimo</span>
+        </h6>
+        <div class="alert alert-light border mb-2">
+            <strong>Zona:</strong> ${data.zona}<br>
+            <strong>Criterio:</strong> ${data.criterio}
+        </div>
+        <div class="mb-3">
+            <div class="d-flex justify-content-between">
+                <span><i class="fas fa-road text-success"></i> ${Number(data.distancia_km).toFixed(2)} km</span>
+                <span><i class="fas fa-clock text-primary"></i> ${Number(data.tiempo_min).toFixed(0)} min</span>
+                <span><i class="fas fa-dollar-sign text-warning"></i> $${Number(data.costo).toFixed(2)}</span>
+            </div>
+            ${holgura > 0.1 ? `<div class="small text-muted mt-1">
+                <i class="fas fa-info-circle me-1"></i>
+                ${tCond.toFixed(0)} min conducción + ${holgura.toFixed(0)} min holgura (×${CONFIG.factorHolgura})
+            </div>` : ''}
+        </div>
+        <hr>
+        <h6 class="fw-bold">Orden óptimo de visita</h6>
+    `;
+    if (Array.isArray(data.nodos_ruta)) {
+        data.nodos_ruta.forEach((nodo, indice) => {
+            html += `
+                <div class="paso">
+                    <span class="indice">${indice + 1}</span>
+                    <div>
+                        <strong>${nodo.nombre}</strong><br>
+                        <small class="text-muted">Nodo: ${nodo.cod}</small>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    panel.innerHTML = html;
 }
 
 // ============================================================
@@ -1091,8 +1189,19 @@ async function cargarFuenteCoordenadas() {
         const select = document.getElementById('fuenteSelect');
         if (!badge || !select) return;
         select.value = data.fuente;
-        badge.style.background = data.fuente === 'osm' ? '#E67E22' : '#2E86C1';
-        badge.title = `Usando coordenadas de ${data.fuente_nombre} · ${data.total_atractivos} atractivos`;
+        badge.style.background = data.es_oficial ? '#27AE60' :
+                                 (data.fuente === 'osm' ? '#E67E22' : '#2E86C1');
+        badge.title = `Fuente activa: ${data.fuente_nombre}` +
+                      (data.es_oficial ? ' (oficial del proyecto)' :
+                       ' (modo de análisis de sensibilidad, no oficial)') +
+                      ` · ${data.total_atractivos} atractivos`;
+
+        const aviso = document.getElementById('avisoHolgura');
+        if (aviso && data.factor_holgura && data.factor_holgura !== 1.0) {
+            aviso.innerHTML = `<br><i class="fas fa-stopwatch me-1"></i>
+                El tiempo mostrado incluye un factor de holgura ×${data.factor_holgura}
+                (+${Math.round((data.factor_holgura - 1) * 100)}%) sobre el tiempo de conducción puro.`;
+        }
     } catch (error) {
         console.warn('No se pudo obtener la fuente:', error);
     }
@@ -1101,6 +1210,20 @@ async function cargarFuenteCoordenadas() {
 async function cambiarFuente(nuevaFuente) {
     const badge = document.getElementById('badgeFuente');
     const select = document.getElementById('fuenteSelect');
+
+    if (nuevaFuente !== CONFIG.fuenteOficial) {
+        const confirmar = confirm(
+            `⚠️ Estás cambiando a ${nuevaFuente === 'osm' ? 'OpenStreetMap' : 'Google Maps'}.\n\n` +
+            `La fuente OFICIAL del proyecto es ${CONFIG.fuenteOficial.toUpperCase()}.\n` +
+            `Este cambio se usa solo para análisis de sensibilidad y los resultados ` +
+            `pueden variar ligeramente.\n\n¿Deseas continuar?`
+        );
+        if (!confirmar) {
+            select.value = CONFIG.fuenteActual;
+            return;
+        }
+    }
+
     if (badge) badge.style.background = '#95a5a6';
     if (select) select.disabled = true;
 
@@ -1128,6 +1251,8 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('================================');
     console.log('Plataforma de rutas de Coclé');
     console.log('Algoritmo: Dijkstra');
+    console.log('Criterio oficial:', CONFIG.criterioOficial);
+    console.log('Fuente oficial:', CONFIG.fuenteOficial);
     console.log('Atractivos:', Object.keys(ATRACTIVOS).length);
     console.log('================================');
 
