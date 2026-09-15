@@ -1,9 +1,58 @@
+"""
+Plataforma de Rutas Turísticas - Provincia de Coclé, Panamá
+Servidor Flask con cálculo de rutas vía OSRM + algoritmo de Dijkstra.
+
+═══════════════════════════════════════════════════════════════════════════════
+ENFOQUE METODOLÓGICO
+═══════════════════════════════════════════════════════════════════════════════
+• Criterio oficial del proyecto: DISTANCIA (km), según indicación del asesor.
+• El criterio "costo" se define como distancia × tarifa uniforme (0.15 USD/km).
+  Al ser una transformación lineal de la distancia, optimizar por costo
+  produce la MISMA ruta que optimizar por distancia. Por eso la plataforma
+  reporta el costo como MÉTRICA INFORMATIVA, no como criterio independiente.
+  El badge "Costo" en la UI está deshabilitado y marcado como métrica.
+• El criterio "tiempo" sí es distinto (usa velocidades reales de OSRM),
+  por lo que puede producir rutas diferentes a distancia.
+
+═══════════════════════════════════════════════════════════════════════════════
+TOPOLOGÍA DEL GRAFO: HUB-AND-SPOKE
+═══════════════════════════════════════════════════════════════════════════════
+El grafo NO es completo. Se construye así:
+  - Cada atractivo se asigna a su hub más cercano (ASIGNACION_HUB).
+  - Se crean aristas atractivo ↔ hub.
+  - Los 5 hubs (Penonomé, Aguadulce, Antón, La Pintada, Natá) se conectan
+    completamente entre sí (K5).
+Esto reduce las consultas a OSRM de O(n²)=841 a O(n·h + h²)≈34.
+Trade-off: rutas entre atractivos de distinto hub pueden dar un pequeño
+rodeo pasando por el hub. Documentado en la tesis como decisión de diseño.
+
+═══════════════════════════════════════════════════════════════════════════════
+FACTOR DE HOLGURA
+═══════════════════════════════════════════════════════════════════════════════
+El tiempo de conducción puro (OSRM) se multiplica por FACTOR_HOLGURA (1.25)
+para reflejar tiempo de paradas, tráfico y visitas. Este factor es
+configurable vía variable de entorno y se reporta explícitamente en la UI
+como "conducción + holgura". Puede deshabilitarse poniendo FACTOR_HOLGURA=1.0.
+
+═══════════════════════════════════════════════════════════════════════════════
+FUENTE OFICIAL DE COORDENADAS
+═══════════════════════════════════════════════════════════════════════════════
+Fuente OFICIAL: Google Maps (ATRACTIVOS_GOOGLE).
+Modo alternativo: OpenStreetMap (ATRACTIVOS_OSM) — disponible para análisis
+de sensibilidad de coordenadas. NO es equivalente a Google; los resultados
+pueden variar ligeramente. La UI indica cuál está activa.
+
+═══════════════════════════════════════════════════════════════════════════════
+"""
+
 from flask import Flask, render_template, request, jsonify
 import os
+import threading
 import requests
 import heapq
 import math
 import time
+from itertools import permutations
 
 app = Flask(__name__)
 
@@ -12,13 +61,23 @@ app = Flask(__name__)
 # ============================================================
 
 OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
-COSTO_POR_KM = 0.15
+COSTO_POR_KM = 0.15          # Tarifa uniforme: reportada como métrica informativa
 TIMEOUT = 30
 MAX_RETRIES = 3
 
 VELOCIDAD_FALLBACK_KMH = 40
 
+# Factor de holgura: el tiempo de conducción OSRM se multiplica por este valor
+# para reflejar paradas, tráfico y visitas. Configurable vía env var.
+# Poner FACTOR_HOLGURA=1.0 desactiva la holgura.
 FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.25"))
+
+# Criterio oficial del proyecto (documentado, no cambia por env var)
+CRITERIO_OFICIAL = "distancia"
+
+# ============================================================
+# COORDENADAS — FUENTE OFICIAL: GOOGLE MAPS
+# ============================================================
 
 ATRACTIVOS_GOOGLE = {
     1: {"nombre": "Playa Santa Clara", "cod": "PSC", "tipo": "Playa",
@@ -200,9 +259,11 @@ ATRACTIVOS_OSM = {
          "descripcion": "Tirolesa y aventura en la selva"}
 }
 
-FUENTE_COORDENADAS = os.environ.get("FUENTE_COORDENADAS", "google").lower()
+# Fuente oficial del proyecto = Google Maps
+FUENTE_OFICIAL = "google"
+FUENTE_COORDENADAS = os.environ.get("FUENTE_COORDENADAS", FUENTE_OFICIAL).lower()
 if FUENTE_COORDENADAS not in ("google", "osm"):
-    FUENTE_COORDENADAS = "google"
+    FUENTE_COORDENADAS = FUENTE_OFICIAL
 
 
 def obtener_atractivos_por_fuente(fuente):
@@ -215,6 +276,7 @@ ATRACTIVOS = obtener_atractivos_por_fuente(FUENTE_COORDENADAS)
 
 HUBS = {15, 16, 17, 18, 19}
 
+# Asignación atractivo → hub más cercano (decisión de diseño hub-and-spoke)
 ASIGNACION_HUB = {
     12: 15, 8: 15, 14: 15, 22: 15,
     5: 17, 4: 17, 2: 17, 1: 17,
@@ -226,6 +288,16 @@ ASIGNACION_HUB = {
 
 
 def edges_topologia():
+    """
+    Construye la lista de aristas del grafo con topología HUB-AND-SPOKE.
+
+    Justificación (documentada en la tesis):
+      • Cada atractivo se conecta SOLO a su hub asignado.
+      • Los 5 hubs se conectan completamente entre sí (K5).
+      • Reduce consultas a OSRM de O(n²)=841 a O(n·h + h²)≈34.
+      • Trade-off: rutas entre atractivos de distinto hub pueden dar un
+        pequeño rodeo pasando por el hub intermedio.
+    """
     aristas = []
     for nodo, hub in ASIGNACION_HUB.items():
         aristas.append((nodo, hub))
@@ -329,6 +401,10 @@ GRAFO = {}
 PUNTOS_AJUSTADOS = {}
 FUENTE_GRAFO = None
 
+# Lock para evitar race conditions: si dos peticiones llegan simultáneamente
+# mientras el grafo no está listo, solo una lo construye y la otra espera.
+_lock_grafo = threading.Lock()
+
 
 def preparar_grafo():
     global GRAFO, PUNTOS_AJUSTADOS, FUENTE_GRAFO
@@ -338,7 +414,18 @@ def preparar_grafo():
 
 
 def asegurar_grafo_actualizado():
-    if not GRAFO or FUENTE_GRAFO != FUENTE_COORDENADAS:
+    """
+    Verifica que el grafo esté listo para la fuente actual.
+    Usa un lock para evitar que dos peticiones concurrentes construyan
+    el grafo simultáneamente (race condition).
+    """
+    global GRAFO, PUNTOS_AJUSTADOS, FUENTE_GRAFO
+    if GRAFO and FUENTE_GRAFO == FUENTE_COORDENADAS:
+        return
+    with _lock_grafo:
+        # Doble verificación dentro del lock
+        if GRAFO and FUENTE_GRAFO == FUENTE_COORDENADAS:
+            return
         preparar_grafo()
 
 
@@ -366,7 +453,7 @@ def ajustar_puntos_a_carreteras():
 def dijkstra(grafo, origen, destino, criterio):
     pesos = {"distancia": "distancia_km", "tiempo": "tiempo_min", "costo": "costo"}
     if criterio not in pesos:
-        criterio = "tiempo"
+        criterio = CRITERIO_OFICIAL
     campo_peso = pesos[criterio]
     if origen not in grafo or destino not in grafo:
         return None
@@ -399,6 +486,44 @@ def dijkstra(grafo, origen, destino, criterio):
         nodo = anteriores[nodo]
     camino.reverse()
     return {"camino": camino, "peso_total": distancias[destino], "criterio": criterio}
+
+
+def orden_optimo_visita(destinos, criterio="distancia"):
+    """
+    Encuentra el orden óptimo de visita de un conjunto de destinos
+    (partiendo y volviendo a Penonomé=15) usando fuerza bruta con permutaciones.
+    Para 4-6 destinos es viable (máximo 6! = 720 permutaciones).
+    Consistente con el script de escritorio.
+    """
+    BASE = 15
+    destinos_sin_base = [d for d in destinos if d != BASE]
+    if not destinos_sin_base:
+        return [], 0.0
+
+    campo_peso = {"distancia": "distancia_km", "tiempo": "tiempo_min", "costo": "costo"}[criterio]
+
+    mejor_costo = float("inf")
+    mejor_orden = None
+
+    for perm in permutations(destinos_sin_base):
+        secuencia = [BASE] + list(perm) + [BASE]
+        total = 0.0
+        valido = True
+        for i in range(len(secuencia) - 1):
+            a, b = secuencia[i], secuencia[i + 1]
+            if a not in GRAFO or b not in GRAFO or b not in GRAFO[a]:
+                valido = False
+                break
+            peso = GRAFO[a][b].get(campo_peso, 0)
+            if peso <= 0:
+                valido = False
+                break
+            total += peso
+        if valido and total < mejor_costo:
+            mejor_costo = total
+            mejor_orden = list(perm)
+
+    return mejor_orden, mejor_costo
 
 
 def obtener_metricas_camino_completo(camino):
@@ -447,9 +572,20 @@ def obtener_metricas_camino_completo(camino):
             "costo": dist_total * COSTO_POR_KM, "fuente": "haversine", "exito": False}
 
 
+# ============================================================
+# RUTAS HTTP
+# ============================================================
+
 @app.route("/")
 def index():
-    return render_template("index.html", atractivos=ATRACTIVOS)
+    return render_template(
+        "index.html",
+        atractivos=ATRACTIVOS,
+        fuente_actual=FUENTE_COORDENADAS,
+        fuente_oficial=FUENTE_OFICIAL,
+        factor_holgura=FACTOR_HOLGURA,
+        criterio_oficial=CRITERIO_OFICIAL,
+    )
 
 
 @app.route("/api/ruta", methods=["POST"])
@@ -458,7 +594,7 @@ def api_ruta():
         data = request.get_json()
         origen = int(data["origen"])
         destino = int(data["destino"])
-        criterio = data.get("criterio", "tiempo")
+        criterio = data.get("criterio", CRITERIO_OFICIAL)
         if origen not in ATRACTIVOS:
             return jsonify({"exito": False, "error": "El nodo de origen no existe."}), 400
         if destino not in ATRACTIVOS:
@@ -505,6 +641,118 @@ def api_ruta():
         return jsonify({"exito": False, "error": str(e)}), 500
 
 
+@app.route("/api/dia/<int:dia_num>")
+def api_dia(dia_num):
+    """
+    Devuelve la ruta óptima de un día específico, calculando el ORDEN ÓPTIMO
+    de visita (no el orden predefinido). Consistente con el script de escritorio.
+    """
+    try:
+        dias = {
+            1: {"destinos": [1, 2, 4, 5, 17], "zona": "🌊 Playas de Antón"},
+            2: {"destinos": [8, 22, 12, 14, 15], "zona": "🏛️ Penonomé Histórico"},
+            3: {"destinos": [18, 20, 23, 24, 13, 9], "zona": "⛰️ La Pintada - Montaña"},
+            4: {"destinos": [10, 25, 26, 19], "zona": "🏺 Ruta Arqueológica de Natá"},
+            5: {"destinos": [6, 7, 28, 21, 29], "zona": "🌿 Naturaleza de Antón"},
+            6: {"destinos": [16, 3, 27, 11], "zona": "🌅 Tesoros de Aguadulce"},
+            7: {"destinos": [15, 18, 20, 23, 24], "zona": "🎯 Circuito Integrador"}
+        }
+        if dia_num not in dias:
+            return jsonify({"exito": False, "error": "Día inválido (1-7)."}), 400
+        criterio = request.args.get("criterio", CRITERIO_OFICIAL)
+        if criterio not in ("distancia", "tiempo", "costo"):
+            criterio = CRITERIO_OFICIAL
+        dia = dias[dia_num]
+        destinos = dia["destinos"]
+        asegurar_grafo_actualizado()
+
+        # Calcular orden óptimo de visita (partiendo y volviendo a Penonomé)
+        orden, _ = orden_optimo_visita(destinos, criterio)
+        if orden is None:
+            return jsonify({"exito": False, "error": "No se pudo calcular el orden óptimo."}), 500
+
+        # Encadenar Dijkstra entre nodos consecutivos del orden óptimo
+        BASE = 15
+        secuencia = [BASE] + orden + [BASE]
+        tramos = []
+        for i in range(len(secuencia) - 1):
+            origen = secuencia[i]
+            destino = secuencia[i + 1]
+            resultado = dijkstra(GRAFO, origen, destino, criterio)
+            if resultado is None:
+                return jsonify({"exito": False, "error": f"No hay camino entre {origen} y {destino}."}), 500
+            camino = resultado["camino"]
+            metricas = obtener_metricas_camino_completo(camino)
+            tramos.append({
+                "origen": origen,
+                "destino": destino,
+                "camino": camino,
+                "puntos_ruta": metricas["puntos_ruta"],
+                "distancia_km": metricas["distancia_km"],
+                "tiempo_conduccion_min": metricas["tiempo_conduccion_min"],
+                "costo": metricas["costo"],
+                "fuente_metricas": metricas["fuente"],
+                "nodos_ruta": [
+                    {"id": n, **ATRACTIVOS[n],
+                     "lat_carretera": PUNTOS_AJUSTADOS[n]["lat"],
+                     "lng_carretera": PUNTOS_AJUSTADOS[n]["lng"]}
+                    for n in camino
+                ],
+            })
+
+        # Combinar tramos
+        puntos_ruta = []
+        nodos_ruta = []
+        segmentos = []
+        dist_total = 0.0
+        t_conduccion = 0.0
+        costo_total = 0.0
+        todas_osrm = True
+        for i, t in enumerate(tramos):
+            puntos = t["puntos_ruta"] if i == 0 else t["puntos_ruta"][1:]
+            puntos_ruta.extend(puntos)
+            nodos = t["nodos_ruta"] if i == 0 else t["nodos_ruta"][1:]
+            nodos_ruta.extend(nodos)
+            dist_total += t["distancia_km"]
+            t_conduccion += t["tiempo_conduccion_min"]
+            costo_total += t["costo"]
+            if t["fuente_metricas"] != "osrm":
+                todas_osrm = False
+            # Segmentos del tramo (aristas del grafo)
+            for j in range(len(t["camino"]) - 1):
+                a, b = t["camino"][j], t["camino"][j + 1]
+                d = GRAFO[a][b]
+                segmentos.append({
+                    "origen": a, "destino": b,
+                    "distancia_km": round(d["distancia_km"], 2),
+                    "tiempo_min": round(d["tiempo_min"], 2),
+                    "costo": round(d["costo"], 2),
+                })
+
+        t_total = t_conduccion * FACTOR_HOLGURA
+        return jsonify({
+            "exito": True,
+            "dia": dia_num,
+            "zona": dia["zona"],
+            "criterio": criterio,
+            "orden_optimo": [BASE] + orden + [BASE],
+            "camino": [BASE] + orden + [BASE],
+            "nodos_ruta": nodos_ruta,
+            "puntos_ruta": puntos_ruta,
+            "segmentos": segmentos,
+            "distancia_km": round(dist_total, 2),
+            "tiempo_conduccion_min": round(t_conduccion, 2),
+            "tiempo_min": round(t_total, 2),
+            "factor_holgura": FACTOR_HOLGURA,
+            "costo": round(costo_total, 2),
+            "fuente_metricas": "osrm" if todas_osrm else "haversine",
+            "nodos_visitados": len(nodos_ruta),
+        })
+    except Exception as e:
+        print("ERROR API DIA:", e)
+        return jsonify({"exito": False, "error": str(e)}), 500
+
+
 @app.route("/api/coordenadas")
 def api_coordenadas():
     asegurar_grafo_actualizado()
@@ -517,12 +765,6 @@ def api_coordenadas():
             "lat_carretera": datos["lat"], "lng_carretera": datos["lng"]
         }
     return jsonify(resultado)
-
-
-@app.route("/api/grafo")
-def api_grafo():
-    asegurar_grafo_actualizado()
-    return jsonify(GRAFO)
 
 
 @app.route("/api/dias")
@@ -543,9 +785,13 @@ def api_dias():
 def api_fuente_get():
     return jsonify({
         "fuente": FUENTE_COORDENADAS,
+        "fuente_oficial": FUENTE_OFICIAL,
         "fuente_nombre": "OpenStreetMap" if FUENTE_COORDENADAS == "osm" else "Google Maps",
+        "es_oficial": FUENTE_COORDENADAS == FUENTE_OFICIAL,
         "total_atractivos": len(ATRACTIVOS),
-        "factor_holgura": FACTOR_HOLGURA
+        "factor_holgura": FACTOR_HOLGURA,
+        "criterio_oficial": CRITERIO_OFICIAL,
+        "costo_por_km": COSTO_POR_KM,
     })
 
 
@@ -557,17 +803,20 @@ def api_fuente_post():
         nueva = str(data.get("fuente", "")).lower().strip()
         if nueva not in ("google", "osm"):
             return jsonify({"exito": False, "error": "Fuente inválida. Use 'google' u 'osm'."}), 400
-        if nueva == FUENTE_COORDENADAS and GRAFO and FUENTE_GRAFO == nueva:
-            return jsonify({"exito": True, "fuente": FUENTE_COORDENADAS, "mensaje": "La fuente ya estaba activa."})
-        FUENTE_COORDENADAS = nueva
-        ATRACTIVOS = obtener_atractivos_por_fuente(nueva)
-        GRAFO = {}
-        PUNTOS_AJUSTADOS = {}
-        FUENTE_GRAFO = None
+        with _lock_grafo:
+            if nueva == FUENTE_COORDENADAS and GRAFO and FUENTE_GRAFO == nueva:
+                return jsonify({"exito": True, "fuente": FUENTE_COORDENADAS,
+                                "mensaje": "La fuente ya estaba activa."})
+            FUENTE_COORDENADAS = nueva
+            ATRACTIVOS = obtener_atractivos_por_fuente(nueva)
+            GRAFO = {}
+            PUNTOS_AJUSTADOS = {}
+            FUENTE_GRAFO = None
         asegurar_grafo_actualizado()
         return jsonify({"exito": True, "fuente": FUENTE_COORDENADAS,
                         "fuente_nombre": "OpenStreetMap" if FUENTE_COORDENADAS == "osm" else "Google Maps",
-                        "total_atractivos": len(ATRACTIVOS)})
+                        "es_oficial": FUENTE_COORDENADAS == FUENTE_OFICIAL,
+                        "total_atractivos": len(ATTRACTIVOS) if False else len(ATRACTIVOS)})
     except Exception as e:
         print("ERROR API FUENTE POST:", e)
         return jsonify({"exito": False, "error": str(e)}), 500
@@ -577,20 +826,19 @@ if __name__ == "__main__":
     print("==========================================")
     print(" RUTAS TURÍSTICAS DE COCLÉ")
     print(" Optimización mediante Dijkstra")
-    print(" Grafo: atractivo<->hub, hub<->hub")
+    print(" Grafo: hub-and-spoke (atractivo<->hub, hub<->hub)")
     print("==========================================")
     print(f"Atractivos registrados: {len(ATRACTIVOS)}")
-    print(f"Fuente de coordenadas: {FUENTE_COORDENADAS.upper()}")
-    print(f"Factor de holgura de tiempo: {FACTOR_HOLGURA} (+{round((FACTOR_HOLGURA - 1) * 100)}%)")
+    print(f"Fuente oficial: {FUENTE_OFICIAL.upper()}")
+    print(f"Fuente activa: {FUENTE_COORDENADAS.upper()}")
+    print(f"Criterio oficial: {CRITERIO_OFICIAL.upper()}")
+    print(f"Factor de holgura: {FACTOR_HOLGURA} (+{round((FACTOR_HOLGURA - 1) * 100)}%)")
+    print(f"Costo por km (informativo): {COSTO_POR_KM} USD/km")
 
-    # Se precalienta el grafo al iniciar, para que la primera petición de un
-    # usuario real no tenga que esperar a que se consulten ~34 aristas a OSRM.
-    # Si OSRM no responde al arrancar (por ejemplo, sin red), no se detiene el
-    # servidor: el grafo se construye de todos modos en la primera petición,
-    # vía asegurar_grafo_actualizado().
+    # Precalentamiento con lock (ya no hay race condition)
     try:
         print("Precalentando el grafo (puede tardar unos segundos)...")
-        preparar_grafo()
+        asegurar_grafo_actualizado()
         print(f"Grafo listo: {len(GRAFO)} nodos, "
               f"{sum(len(v) for v in GRAFO.values()) // 2} aristas.")
     except Exception as e:
