@@ -36,7 +36,7 @@
         .header h1 { font-weight: 700; font-size: 2rem; }
         .subtitulo { color: rgba(255,255,255,0.85); }
 
-        /* ÁGUILA HARPÍA */
+        /* RAPAS */
         .harpia-box {
             display: flex;
             align-items: center;
@@ -345,10 +345,10 @@
             <div class="col-md-5 text-md-end mt-3 mt-md-0">
                 <div class="harpia-box">
                     <span class="harpia" id="harpia"
-                          title="¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá. Haz clic para escuchar la ruta.">🦅</span>
+                          title="¡Hola! Soy Rapas. Haz clic para escuchar la ruta.">🦅</span>
                     <button class="btn-harpia" id="btnHarpia" onclick="hablarHarpia()">
                         <i class="fas fa-volume-up me-2"></i>
-                        <span id="harpiaTexto">Hablar con la Harpía</span>
+                        <span id="harpiaTexto">Hablar con Rapas</span>
                     </button>
                 </div>
             </div>
@@ -929,7 +929,7 @@ function limpiarRutaGeoJSON() {
 }
 
 // ============================================================
-// ÁGUILA HARPÍA (VOZ)
+// RAPAS (VOZ)
 // ============================================================
 
 let harpiaHablando = false;
@@ -949,17 +949,18 @@ function hablarHarpia() {
         harpiaHablando = false;
         btn.classList.remove('escuchando');
         harpia.classList.remove('hablando');
-        texto.textContent = 'Hablar con la Harpía';
+        texto.textContent = 'Hablar con Rapas';
         return;
     }
 
+    saludoDado = true;
     let mensaje = '';
 
     if (rutaGeoJSONLayer) {
         const distancia = document.getElementById('totalDistancia').textContent;
         const tiempo = document.getElementById('totalTiempo').textContent;
         mensaje =
-            `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá. ` +
+            `¡Hola! Soy Rapas. ` +
             `Tienes cargada una ruta desde un archivo GeoJSON. ` +
             `La distancia total es de ${distancia} y el tiempo estimado es de ${tiempo}. ` +
             `¡Disfruta tu recorrido por la provincia de Coclé!`;
@@ -976,7 +977,7 @@ function hablarHarpia() {
         const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
 
         mensaje =
-            `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá, y te acompañaré en este recorrido. ` +
+            `¡Hola! Soy Rapas, y te acompañaré en este recorrido. ` +
             `Usando el algoritmo de Dijkstra, se calculó la ruta óptima según el criterio de ${criterio}. ` +
             `El recorrido inicia en ${origen} y termina en ${destino}, pasando por ${ultimaRuta.nodos_ruta.length} atractivos. ` +
             `La distancia total es de ${distancia} kilómetros, el tiempo estimado es de ${tiempo} minutos ` +
@@ -984,7 +985,7 @@ function hablarHarpia() {
             `¡Disfruta tu recorrido por la provincia de Coclé!`;
     } else {
         mensaje =
-            `¡Hola! Soy el Águila Harpía, símbolo nacional de Panamá. ` +
+            `¡Hola! Soy Rapas. ` +
             `Aún no has calculado ninguna ruta. ` +
             `Selecciona un origen y un destino, y presiona el botón de calcular ruta óptima con Dijkstra. ` +
             `Después podrás hacerme clic de nuevo y te contaré todos los detalles de tu recorrido por Coclé.`;
@@ -1003,29 +1004,102 @@ function hablarHarpia() {
         harpiaHablando = true;
         btn.classList.add('escuchando');
         harpia.classList.add('hablando');
-        texto.textContent = 'Detener a la Harpía';
+        texto.textContent = 'Detener a Rapas';
     };
 
     utterance.onend = () => {
         harpiaHablando = false;
         btn.classList.remove('escuchando');
         harpia.classList.remove('hablando');
-        texto.textContent = 'Hablar con la Harpía';
+        texto.textContent = 'Hablar con Rapas';
     };
 
     utterance.onerror = () => {
         harpiaHablando = false;
         btn.classList.remove('escuchando');
         harpia.classList.remove('hablando');
-        texto.textContent = 'Hablar con la Harpía';
+        texto.textContent = 'Hablar con Rapas';
     };
 
     window.speechSynthesis.speak(utterance);
 }
 
+// Saludo automático al abrir la página.
+// Si el navegador bloquea el audio sin interacción previa, Rapas saluda
+// en cuanto el usuario hace el primer clic, toque o pulsación de tecla.
+let saludoDado = false;
+let esperandoSaludo = false;
+
+function saludoInicial() {
+    if (!window.speechSynthesis || saludoDado || harpiaHablando) return;
+    saludoDado = true;
+
+    const btn = document.getElementById('btnHarpia');
+    const harpia = document.getElementById('harpia');
+    const texto = document.getElementById('harpiaTexto');
+    let empezo = false;
+
+    const utterance = new SpeechSynthesisUtterance(
+        '¡Hola! Soy Rapas, te doy la bienvenida a las rutas turísticas de Coclé. ' +
+        'Selecciona un origen y un destino, y presiona calcular ruta óptima con Dijkstra.'
+    );
+    utterance.lang = 'es-PA';
+    utterance.rate = 0.95;
+    utterance.pitch = 1.1;
+    const vozEspanol = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('es'));
+    if (vozEspanol) utterance.voice = vozEspanol;
+
+    const reiniciar = () => {
+        harpiaHablando = false;
+        btn.classList.remove('escuchando');
+        harpia.classList.remove('hablando');
+        texto.textContent = 'Hablar con Rapas';
+    };
+
+    utterance.onstart = () => {
+        empezo = true;
+        harpiaHablando = true;
+        btn.classList.add('escuchando');
+        harpia.classList.add('hablando');
+        texto.textContent = 'Detener a Rapas';
+    };
+    utterance.onend = reiniciar;
+    utterance.onerror = (e) => {
+        reiniciar();
+        if (e && e.error === 'not-allowed') {
+            saludoDado = false;
+            esperarInteraccionParaSaludar();
+        }
+    };
+
+    window.speechSynthesis.speak(utterance);
+
+    // Si el navegador no empieza a hablar, esperar la primera interacción
+    setTimeout(() => {
+        if (!empezo && saludoDado) {
+            window.speechSynthesis.cancel();
+            saludoDado = false;
+            esperarInteraccionParaSaludar();
+        }
+    }, 1500);
+}
+
+function esperarInteraccionParaSaludar() {
+    if (esperandoSaludo) return;
+    esperandoSaludo = true;
+    const eventos = ['click', 'touchstart', 'keydown'];
+    const intentar = () => {
+        eventos.forEach(ev => document.removeEventListener(ev, intentar));
+        esperandoSaludo = false;
+        saludoInicial();
+    };
+    eventos.forEach(ev => document.addEventListener(ev, intentar));
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const harpia = document.getElementById('harpia');
     if (harpia) harpia.addEventListener('click', hablarHarpia);
+    saludoInicial();
 });
 
 // ============================================================
