@@ -363,10 +363,12 @@
     <div class="aviso-informativo">
         <i class="fas fa-info-circle me-1"></i>
         <strong>Criterio oficial: DISTANCIA.</strong>
-        El sistema construye un grafo completo entre los 29 atractivos y aplica
-        <strong>Dijkstra</strong> para encontrar la ruta más corta. Las distancias se
-        calculan con <strong>OSRM</strong> sobre OpenStreetMap.
-        El <em>costo</em> se reporta como métrica informativa (distancia × 0.15 USD/km).
+        El sistema construye un grafo con los 29 atractivos (cada uno conectado a sus
+        4 vecinos más cercanos y a un árbol de expansión mínima) y aplica
+        <strong>Dijkstra</strong> para encontrar el camino mínimo. Los pesos de las
+        aristas (distancia, tiempo y costo) se obtienen con <strong>OSRM</strong> sobre
+        OpenStreetMap. Dijkstra minimiza únicamente la <em>distancia</em>; el tiempo y
+        el costo (distancia × 0.15 USD/km) se reportan como métricas informativas.
         <span id="avisoHolgura"></span>
     </div>
 
@@ -434,17 +436,6 @@
                       title="Criterio oficial del proyecto">
                     <i class="fas fa-ruler"></i> Distancia
                 </span>
-                <span class="criterio-badge" data-criterio="tiempo"
-                      onclick="seleccionarCriterio('tiempo')"
-                      title="Velocidades reales de OSRM">
-                    <i class="fas fa-clock"></i> Tiempo
-                </span>
-                <span class="criterio-badge informativo" data-criterio="costo"
-                      onclick="seleccionarCriterio('costo')"
-                      title="Costo = distancia × 0.15 USD/km. Al ser lineal, produce la misma ruta que Distancia. Se reporta como métrica informativa.">
-                    <i class="fas fa-dollar-sign"></i> Costo
-                    <i class="fas fa-info-circle ms-1" style="font-size:0.7em;"></i>
-                </span>
             </div>
         </div>
     </div>
@@ -493,7 +484,8 @@
     <p class="text-center text-muted small mb-4">
         <i class="fas fa-info-circle me-1"></i>
         Cada día calcula el <strong>orden óptimo de visita</strong> (partiendo y
-        volviendo a Penonomé) aplicando Dijkstra sobre el grafo completo.
+        volviendo a Penonomé) y los caminos mínimos entre paradas aplicando
+        Dijkstra sobre el grafo de atractivos.
     </p>
     <div class="row g-3" id="diasContainer"></div>
 
@@ -603,15 +595,6 @@ function llenarSelectores() {
 }
 
 function seleccionarCriterio(criterio) {
-    if (criterio === 'costo') {
-        const continuar = confirm(
-            "ℹ️ El criterio COSTO usa una tarifa uniforme (distancia × 0.15 USD/km).\n\n" +
-            "Por eso produce la MISMA ruta que DISTANCIA. Se reporta como métrica " +
-            "informativa, no como criterio independiente.\n\n" +
-            "¿Deseas continuar?"
-        );
-        if (!continuar) return;
-    }
     criterioActual = criterio;
     document.querySelectorAll('.criterio-badge').forEach(el => {
         el.classList.toggle('active', el.dataset.criterio === criterio);
@@ -768,6 +751,13 @@ function actualizarEstadisticas(data) {
     document.getElementById('totalParadas').textContent = data.nodos_ruta.length;
 }
 
+// Etiqueta para atractivos por los que solo se pasa (no son parada)
+function etiquetaDePaso(nodo) {
+    return nodo.es_parada === false
+        ? ' <span class="badge bg-light text-dark border ms-1">de paso</span>'
+        : '';
+}
+
 // ============================================================
 // PANEL — RUTA ÓPTIMA
 // ============================================================
@@ -775,13 +765,11 @@ function actualizarEstadisticas(data) {
 function actualizarPanel(data) {
     const panel = document.getElementById('panelRuta');
     const nombresCriterio = {
-        distancia: 'Distancia mínima',
-        tiempo: 'Tiempo mínimo',
-        costo: 'Costo (métrica informativa — equivale a distancia)'
+        distancia: 'Distancia mínima'
     };
     const nombreCriterio = nombresCriterio[data.criterio] || data.criterio || 'Criterio seleccionado';
 
-    const badgeMetricas = `<span class="badge bg-success ms-1" title="Métricas medidas por OSRM sobre OpenStreetMap">
+    const badgeMetricas = `<span class="badge bg-success ms-1" title="Pesos del grafo medidos por OSRM sobre OpenStreetMap">
         <i class="fas fa-check-circle me-1"></i>Métricas: OSRM
     </span>`;
 
@@ -831,7 +819,7 @@ function actualizarPanel(data) {
                 <div class="paso">
                     <span class="indice">${indice + 1}</span>
                     <div>
-                        <strong>${nodo.nombre}</strong><br>
+                        <strong>${nodo.nombre}</strong>${etiquetaDePaso(nodo)}<br>
                         <small class="text-muted">Nodo: ${nodo.cod}</small>
                     </div>
                 </div>
@@ -983,9 +971,7 @@ function hablarHarpia() {
         const costo = Number(ultimaRuta.costo).toFixed(2);
 
         const nombresCriterio = {
-            distancia: 'distancia mínima',
-            tiempo: 'tiempo mínimo',
-            costo: 'costo mínimo, que equivale a distancia mínima porque usamos una tarifa uniforme'
+            distancia: 'distancia mínima'
         };
         const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
 
@@ -1146,7 +1132,7 @@ function actualizarPanelDia(data) {
                 <div class="paso">
                     <span class="indice">${indice + 1}</span>
                     <div>
-                        <strong>${nodo.nombre}</strong><br>
+                        <strong>${nodo.nombre}</strong>${etiquetaDePaso(nodo)}<br>
                         <small class="text-muted">Nodo: ${nodo.cod}</small>
                     </div>
                 </div>
@@ -1240,7 +1226,7 @@ async function cambiarFuente(nuevaFuente) {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('================================');
     console.log('Plataforma de rutas de Coclé');
-    console.log('Método: Grafo completo + Dijkstra');
+    console.log('Método: Grafo de atractivos + Dijkstra');
     console.log('Criterio oficial:', CONFIG.criterioOficial);
     console.log('Fuente oficial:', CONFIG.fuenteOficial);
     console.log('Atractivos:', Object.keys(ATRACTIVOS).length);
