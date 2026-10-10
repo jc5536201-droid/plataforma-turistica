@@ -627,6 +627,7 @@ async function calcularRuta() {
         await dibujarRuta(data);
         actualizarEstadisticas(data);
         actualizarPanel(data);
+        try { hablarHarpia(null, true); } catch (e) { console.warn('Rapas no pudo hablar:', e); }
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('panelRuta').innerHTML = `
@@ -933,10 +934,45 @@ function limpiarRutaGeoJSON() {
 // ============================================================
 
 let harpiaHablando = false;
+let vozActual = null;
 
-function hablarHarpia() {
+// Voz de hombre para Rapas. El navegador no indica el género de las voces,
+// así que se elige por nombre; si no hay ninguna masculina en español,
+// se usa una voz en español con el tono más grave.
+const VOZ_MASCULINA = /jorge|diego|juan|carlos|pablo|raul|raúl|enrique|miguel|alvaro|álvaro|alonso|tomas|tomás|andres|andrés|antonio|jaime|luis|\bmale\b|hombre|masculin/i;
+const VOZ_FEMENINA = /monica|mónica|paulina|helena|laura|sabina|esperanza|angelica|angélica|marisol|dalia|elvira|elena|female|mujer|femenin|zira|google español/i;
+const REGIONES_PREFERIDAS = ['es-pa', 'es-mx', 'es-us', 'es-co', 'es-419', 'es-ar', 'es-es'];
+
+function configurarVozRapas(utterance) {
+    utterance.lang = 'es-PA';
+    utterance.rate = 0.95;
+    const voces = window.speechSynthesis.getVoices()
+        .filter(v => v.lang && v.lang.toLowerCase().replace('_', '-').startsWith('es'));
+    const orden = v => {
+        const i = REGIONES_PREFERIDAS.indexOf(v.lang.toLowerCase().replace('_', '-'));
+        return i === -1 ? 99 : i;
+    };
+    const masculinas = voces
+        .filter(v => VOZ_MASCULINA.test(v.name) && !VOZ_FEMENINA.test(v.name))
+        .sort((a, b) => orden(a) - orden(b));
+    if (masculinas.length) {
+        utterance.voice = masculinas[0];
+        utterance.lang = masculinas[0].lang;
+        utterance.pitch = 0.9;
+    } else {
+        if (voces.length) {
+            utterance.voice = voces[0];
+            utterance.lang = voces[0].lang;
+        }
+        utterance.pitch = 0.6;
+    }
+}
+
+// automatico = true: Rapas narra la ruta recién calculada (sin saludo y sin
+// alertas); si ya estaba hablando, se interrumpe y cuenta la nueva ruta.
+function hablarHarpia(evento, automatico) {
     if (!window.speechSynthesis) {
-        alert('Tu navegador no soporta síntesis de voz.');
+        if (!automatico) alert('Tu navegador no soporta síntesis de voz.');
         return;
     }
 
@@ -950,9 +986,10 @@ function hablarHarpia() {
         btn.classList.remove('escuchando');
         harpia.classList.remove('hablando');
         texto.textContent = 'Hablar con Rapas';
-        return;
+        if (!automatico) return;
     }
 
+    if (automatico) window.speechSynthesis.cancel();
     saludoDado = true;
     let mensaje = '';
 
@@ -977,7 +1014,7 @@ function hablarHarpia() {
         const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
 
         mensaje =
-            `¡Hola! Soy Rapas, y te acompañaré en este recorrido. ` +
+            (automatico ? '' : `¡Hola! Soy Rapas, y te acompañaré en este recorrido. `) +
             `Usando el algoritmo de Dijkstra, se calculó la ruta óptima según el criterio de ${criterio}. ` +
             `El recorrido inicia en ${origen} y termina en ${destino}, pasando por ${ultimaRuta.nodos_ruta.length} atractivos. ` +
             `La distancia total es de ${distancia} kilómetros, el tiempo estimado es de ${tiempo} minutos ` +
@@ -992,13 +1029,8 @@ function hablarHarpia() {
     }
 
     const utterance = new SpeechSynthesisUtterance(mensaje);
-    utterance.lang = 'es-PA';
-    utterance.rate = 0.95;
-    utterance.pitch = 1.1;
-
-    const voces = window.speechSynthesis.getVoices();
-    const vozEspanol = voces.find(v => v.lang.startsWith('es'));
-    if (vozEspanol) utterance.voice = vozEspanol;
+    configurarVozRapas(utterance);
+    vozActual = utterance;
 
     utterance.onstart = () => {
         harpiaHablando = true;
@@ -1008,6 +1040,7 @@ function hablarHarpia() {
     };
 
     utterance.onend = () => {
+        if (vozActual !== utterance) return;
         harpiaHablando = false;
         btn.classList.remove('escuchando');
         harpia.classList.remove('hablando');
@@ -1015,6 +1048,7 @@ function hablarHarpia() {
     };
 
     utterance.onerror = () => {
+        if (vozActual !== utterance) return;
         harpiaHablando = false;
         btn.classList.remove('escuchando');
         harpia.classList.remove('hablando');
@@ -1043,13 +1077,11 @@ function saludoInicial() {
         '¡Hola! Soy Rapas, te doy la bienvenida a las rutas turísticas de Coclé. ' +
         'Selecciona un origen y un destino, y presiona calcular ruta óptima con Dijkstra.'
     );
-    utterance.lang = 'es-PA';
-    utterance.rate = 0.95;
-    utterance.pitch = 1.1;
-    const vozEspanol = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('es'));
-    if (vozEspanol) utterance.voice = vozEspanol;
+    configurarVozRapas(utterance);
+    vozActual = utterance;
 
     const reiniciar = () => {
+        if (vozActual !== utterance) return;
         harpiaHablando = false;
         btn.classList.remove('escuchando');
         harpia.classList.remove('hablando');
@@ -1076,7 +1108,7 @@ function saludoInicial() {
 
     // Si el navegador no empieza a hablar, esperar la primera interacción
     setTimeout(() => {
-        if (!empezo && saludoDado) {
+        if (!empezo && saludoDado && vozActual === utterance) {
             window.speechSynthesis.cancel();
             saludoDado = false;
             esperarInteraccionParaSaludar();
@@ -1099,7 +1131,20 @@ function esperarInteraccionParaSaludar() {
 document.addEventListener('DOMContentLoaded', function() {
     const harpia = document.getElementById('harpia');
     if (harpia) harpia.addEventListener('click', hablarHarpia);
-    saludoInicial();
+
+    // Esperar un momento a que el navegador cargue las voces antes de saludar
+    if (window.speechSynthesis) {
+        if (window.speechSynthesis.getVoices().length) {
+            saludoInicial();
+        } else {
+            let lanzado = false;
+            const lanzar = () => { if (!lanzado) { lanzado = true; saludoInicial(); } };
+            if (typeof window.speechSynthesis.addEventListener === 'function') {
+                window.speechSynthesis.addEventListener('voiceschanged', lanzar, { once: true });
+            }
+            setTimeout(lanzar, 700);
+        }
+    }
 });
 
 // ============================================================
@@ -1162,6 +1207,7 @@ async function cargarDia(diaNum) {
         await dibujarRuta(data);
         actualizarEstadisticas(data);
         actualizarPanelDia(data);
+        try { hablarHarpia(null, true); } catch (e) { console.warn('Rapas no pudo hablar:', e); }
     } catch (error) {
         console.error('Error calculando itinerario:', error);
         document.getElementById('panelRuta').innerHTML = `
