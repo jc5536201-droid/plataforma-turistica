@@ -1,1370 +1,633 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rutas Turísticas - Coclé, Panamá</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
-    <style>
-        :root {
-            --verde: #1D9E75;
-            --azul: #2E86C1;
-            --oscuro: #1F4E79;
-            --morado: #6C3CE1;
-            --rojo: #E74C3C;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f0f4f8;
-        }
-
-        /* HEADER */
-        .header {
-            background: linear-gradient(135deg, var(--oscuro), var(--verde));
-            padding: 20px 0;
-            color: white;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-
-        .header h1 { font-weight: 700; font-size: 2rem; }
-        .subtitulo { color: rgba(255,255,255,0.85); }
-
-        /* RAPAS */
-        .harpia-box {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-        }
-
-        .harpia {
-            font-size: 3.2rem;
-            line-height: 1;
-            cursor: pointer;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
-            transition: transform 0.3s ease;
-            user-select: none;
-            animation: flotar 3s ease-in-out infinite;
-        }
-
-        .harpia:hover { transform: scale(1.15); }
-        .harpia.hablando { animation: aletear 0.6s ease-in-out infinite; }
-
-        @keyframes flotar {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-6px); }
-        }
-
-        @keyframes aletear {
-            0%, 100% { transform: rotate(-6deg) scale(1.05); }
-            50% { transform: rotate(6deg) scale(1.12); }
-        }
-
-        .btn-harpia {
-            background: linear-gradient(135deg, #F39C12, #D35400);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 50px;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(243,156,18,0.4);
-        }
-
-        .btn-harpia:hover { transform: scale(1.05); color: white; }
-        .btn-harpia.escuchando {
-            background: linear-gradient(135deg, #E74C3C, #C0392B);
-            animation: pulso 1.5s infinite;
-        }
-
-        @keyframes pulso {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
-        /* ESTADÍSTICAS */
-        .stat-card {
-            background: white;
-            border-radius: 15px;
-            padding: 15px 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            border-left: 5px solid var(--verde);
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-
-        .stat-card .icono { font-size: 2rem; margin-right: 15px; }
-        .stat-card .numero { font-size: 1.8rem; font-weight: 700; color: var(--oscuro); }
-        .stat-card .etiqueta {
-            font-size: 0.8rem;
-            color: #6c757d;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        /* MAPA */
-        #mapa {
-            height: 500px;
-            border-radius: 15px;
-            border: 3px solid white;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            z-index: 1;
-        }
-
-        /* CRITERIOS */
-        .criterio-badge {
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: all 0.3s ease;
-            background: white;
-            font-size: 0.9rem;
-            user-select: none;
-        }
-
-        .criterio-badge:hover { transform: scale(1.05); }
-        .criterio-badge.active {
-            border-color: var(--verde);
-            background: rgba(29,158,117,0.1);
-            color: var(--verde);
-        }
-
-        .criterio-badge.informativo {
-            background: #f5f5f5;
-            color: #888;
-            cursor: help;
-            opacity: 0.75;
-        }
-        .criterio-badge.informativo:hover {
-            transform: none;
-            background: #eeeeee;
-        }
-
-        /* PANEL */
-        .ruta-info {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .ruta-info::-webkit-scrollbar { width: 5px; }
-        .ruta-info::-webkit-scrollbar-track { background: #f0f4f8; border-radius: 10px; }
-        .ruta-info::-webkit-scrollbar-thumb { background: var(--verde); border-radius: 10px; }
-
-        .ruta-info .paso {
-            display: flex;
-            align-items: center;
-            padding: 8px 12px;
-            border-radius: 8px;
-            margin-top: 5px;
-            background: #f8f9fa;
-        }
-
-        .ruta-info .paso .indice {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: var(--verde);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.75rem;
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
-
-        /* DÍAS */
-        .card-dia {
-            border-radius: 15px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            border: none;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-        }
-
-        .card-dia:hover {
-            transform: scale(1.04);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
-        }
-
-        /* FOOTER */
-        .footer {
-            background: var(--oscuro);
-            color: rgba(255,255,255,0.8);
-            padding: 30px 0;
-            margin-top: 50px;
-        }
-
-        /* SELECT */
-        .form-select-custom {
-            border-radius: 10px;
-            border: 2px solid #e0e0e0;
-            padding: 10px 15px;
-            font-weight: 500;
-        }
-
-        .badge-api {
-            background: #6C3CE1;
-            color: white;
-            font-size: 0.7rem;
-            padding: 3px 10px;
-            border-radius: 12px;
-        }
-
-        .badge-dijkstra {
-            background: #1D9E75;
-            color: white;
-            font-size: 0.7rem;
-            padding: 3px 10px;
-            border-radius: 12px;
-        }
-
-        .badge-fuente {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            color: white;
-            font-size: 0.7rem;
-            padding: 3px 10px;
-            border-radius: 12px;
-            background: #95a5a6;
-            transition: background 0.3s ease;
-        }
-
-        .badge-fuente select {
-            background: transparent;
-            color: white;
-            border: none;
-            font-size: 0.72rem;
-            font-weight: 600;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .badge-fuente select option {
-            color: #000;
-            background: #fff;
-        }
-
-        .btn-calcular {
-            background: linear-gradient(135deg, var(--verde), #157a5a);
-            color: white;
-            border: none;
-            padding: 14px 35px;
-            border-radius: 50px;
-            font-weight: 700;
-            font-size: 1.1rem;
-            width: 100%;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(29,158,117,0.4);
-        }
-
-        .btn-calcular:hover { transform: scale(1.02); color: white; }
-
-        .btn-geojson {
-            background: linear-gradient(135deg, #E67E22, #D35400);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 50px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            width: 100%;
-            margin-top: 10px;
-        }
-
-        .btn-geojson:hover { transform: scale(1.02); color: white; }
-
-        /* Aviso informativo */
-        .aviso-informativo {
-            background: #FFF9E6;
-            border-left: 4px solid #F39C12;
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            color: #7a5c00;
-            margin-bottom: 15px;
-        }
-
-        @media (max-width: 768px) {
-            #mapa { height: 320px; }
-            .stat-card .numero { font-size: 1.3rem; }
-            .header h1 { font-size: 1.4rem; }
-            .harpia { font-size: 2.4rem; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rutas Turísticas - Coclé, Panamá</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+:root{--verde:#1D9E75;--azul:#2E86C1;--oscuro:#1F4E79;--morado:#6C3CE1;--rojo:#E74C3C}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f4f8}
+.header{background:linear-gradient(135deg,var(--oscuro),var(--verde));padding:20px 0;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.header h1{font-weight:700;font-size:2rem}
+.subtitulo{color:rgba(255,255,255,.85)}
+.harpia-box{display:flex;align-items:center;justify-content:center;gap:12px}
+.harpia{font-size:3.2rem;line-height:1;cursor:pointer;filter:drop-shadow(0 4px 8px rgba(0,0,0,.4));transition:transform .3s;user-select:none;animation:flotar 3s ease-in-out infinite}
+.harpia:hover{transform:scale(1.15)}
+.harpia.hablando{animation:aletear .6s ease-in-out infinite}
+@keyframes flotar{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes aletear{0%,100%{transform:rotate(-6deg) scale(1.05)}50%{transform:rotate(6deg) scale(1.12)}}
+.btn-harpia{background:linear-gradient(135deg,#F39C12,#D35400);color:#fff;border:none;padding:10px 20px;border-radius:50px;font-weight:600;font-size:.9rem;transition:all .3s;box-shadow:0 4px 15px rgba(243,156,18,.4)}
+.btn-harpia:hover{transform:scale(1.05);color:#fff}
+.btn-harpia.escuchando{background:linear-gradient(135deg,#E74C3C,#C0392B);animation:pulso 1.5s infinite}
+@keyframes pulso{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.stat-card{background:#fff;border-radius:15px;padding:15px 20px;box-shadow:0 4px 15px rgba(0,0,0,.08);border-left:5px solid var(--verde);transition:transform .3s,box-shadow .3s}
+.stat-card:hover{transform:translateY(-5px);box-shadow:0 8px 25px rgba(0,0,0,.15)}
+.stat-card.principal{background:linear-gradient(135deg,#fff,#e9f8f2);box-shadow:0 4px 18px rgba(29,158,117,.3)}
+.stat-card.ref{opacity:.85}
+.stat-card .icono{font-size:2rem;margin-right:15px}
+.stat-card .numero{font-size:1.8rem;font-weight:700;color:var(--oscuro)}
+.stat-card .etiqueta{font-size:.8rem;color:#6c757d;text-transform:uppercase;letter-spacing:.5px}
+#mapa{height:500px;border-radius:15px;border:3px solid #fff;box-shadow:0 4px 20px rgba(0,0,0,.1);z-index:1}
+.criterio-badge{padding:8px 16px;border-radius:20px;font-weight:600;border:2px solid var(--verde);background:rgba(29,158,117,.1);color:var(--verde);font-size:.9rem;display:inline-block}
+.ruta-info{background:#fff;border-radius:15px;padding:20px;box-shadow:0 4px 15px rgba(0,0,0,.08);max-height:500px;overflow-y:auto}
+.ruta-info .paso{display:flex;align-items:center;padding:8px 12px;border-radius:8px;margin-top:5px;background:#f8f9fa}
+.ruta-info .paso .indice{width:28px;height:28px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.75rem;margin-right:12px;flex-shrink:0}
+.card-dia{border-radius:15px;cursor:pointer;transition:transform .2s,box-shadow .2s;border:none;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.card-dia:hover{transform:scale(1.04);box-shadow:0 8px 25px rgba(0,0,0,.12)}
+.footer{background:var(--oscuro);color:rgba(255,255,255,.8);padding:30px 0;margin-top:50px}
+.form-select-custom{border-radius:10px;border:2px solid #e0e0e0;padding:10px 15px;font-weight:500}
+.badge-api{background:#6C3CE1;color:#fff;font-size:.7rem;padding:3px 10px;border-radius:12px}
+.badge-dijkstra{background:#1D9E75;color:#fff;font-size:.7rem;padding:3px 10px;border-radius:12px}
+.badge-fuente{display:inline-flex;align-items:center;gap:6px;color:#fff;font-size:.7rem;padding:3px 10px;border-radius:12px;background:#95a5a6;transition:background .3s}
+.badge-fuente select{background:transparent;color:#fff;border:none;font-size:.72rem;font-weight:600;cursor:pointer;outline:none}
+.badge-fuente select option{color:#000;background:#fff}
+.btn-calcular{background:linear-gradient(135deg,var(--verde),#157a5a);color:#fff;border:none;padding:14px 35px;border-radius:50px;font-weight:700;font-size:1.1rem;width:100%;transition:all .3s;box-shadow:0 4px 15px rgba(29,158,117,.4)}
+.btn-calcular:hover{transform:scale(1.02);color:#fff}
+.btn-geojson{background:linear-gradient(135deg,#E67E22,#D35400);color:#fff;border:none;padding:14px 25px;border-radius:50px;font-weight:600;transition:all .3s;width:auto;white-space:nowrap}
+.btn-geojson:hover{transform:scale(1.02);color:#fff}
+.aviso-informativo{background:#FFF9E6;border-left:4px solid #F39C12;padding:10px 14px;border-radius:8px;font-size:.82rem;color:#7a5c00;margin-bottom:15px}
+.nav-pills .nav-link{border-radius:50px;font-weight:600;color:var(--oscuro);background:#fff;margin-right:8px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.nav-pills .nav-link.active{background:var(--verde);color:#fff}
+.sitio-card{border:none;border-radius:15px;box-shadow:0 2px 12px rgba(0,0,0,.07);cursor:pointer;height:100%;transition:transform .2s,box-shadow .2s}
+.sitio-card:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.tag-tipo{font-size:.7rem;padding:3px 9px;border-radius:10px;color:#fff;display:inline-block}
+.res-item{background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-bottom:10px;border-left:5px solid var(--azul)}
+.res-item.hotel{border-left-color:#8E44AD}.res-item.restaurante{border-left-color:#E67E22}.res-item.atraccion{border-left-color:var(--verde)}
+.tabla-comb th{background:var(--oscuro);color:#fff;font-weight:600}
+.tabla-comb td.proy{background:#e9f8f2;font-weight:700}
+@media(max-width:768px){ #mapa{height:320px}.stat-card .numero{font-size:1.3rem}.header h1{font-size:1.4rem}.harpia{font-size:2.4rem}}
+</style>
 </head>
-
 <body>
 
-<!-- HEADER -->
 <header class="header">
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-md-7">
-                <h1>
-                    <i class="fas fa-map-marked-alt me-2"></i>
-                    Rutas Turísticas de Coclé
-                </h1>
-                <p class="subtitulo mb-0">
-                    <i class="fas fa-route me-1"></i>
-                    Optimización mediante el algoritmo de Dijkstra
-                    ·
-                    <span class="badge-dijkstra">Dijkstra</span>
-                    <span class="badge-api">OSRM + OpenStreetMap</span>
-                    <span class="badge-fuente" id="badgeFuente"
-                          title="Fuente de coordenadas activa. La oficial del proyecto es Google Maps.">
-                        <i class="fas fa-map-pin"></i>
-                        <select id="fuenteSelect" onchange="cambiarFuente(this.value)">
-                            <option value="google">Google Maps (oficial)</option>
-                            <option value="osm">OpenStreetMap (sensibilidad)</option>
-                        </select>
-                    </span>
-                </p>
-            </div>
-            <div class="col-md-5 text-md-end mt-3 mt-md-0">
-                <div class="harpia-box">
-                    <span class="harpia" id="harpia"
-                          title="¡Hola! Soy Rapas. Haz clic para escuchar la ruta.">🦅</span>
-                    <button class="btn-harpia" id="btnHarpia" onclick="hablarHarpia()">
-                        <i class="fas fa-volume-up me-2"></i>
-                        <span id="harpiaTexto">Hablar con Rapas</span>
-                    </button>
-                </div>
-            </div>
-        </div>
+<div class="container"><div class="row align-items-center">
+  <div class="col-md-7">
+    <h1><i class="fas fa-map-marked-alt me-2"></i>Rutas Turísticas de Coclé</h1>
+    <p class="subtitulo mb-0">
+      <i class="fas fa-route me-1"></i>Optimización mediante el algoritmo de Dijkstra ·
+      <span class="badge-dijkstra">Dijkstra</span>
+      <span class="badge-api">Google Maps + OSRM</span>
+      <span class="badge-fuente" id="badgeFuente" title="Fuente de datos activa. La oficial del proyecto es Google Maps.">
+        <i class="fas fa-map-pin"></i>
+        <select id="fuenteSelect" onchange="cambiarFuente(this.value)">
+          <option value="google">Google Maps (oficial)</option>
+          <option value="osm">OpenStreetMap (sensibilidad)</option>
+        </select>
+      </span>
+    </p>
+  </div>
+  <div class="col-md-5 text-md-end mt-3 mt-md-0">
+    <div class="harpia-box">
+      <span class="harpia" id="harpia" title="¡Hola! Soy Félix el Águila. Haz clic para escuchar la ruta.">🦅</span>
+      <button class="btn-harpia" id="btnHarpia" onclick="hablarHarpia()">
+        <i class="fas fa-volume-up me-2"></i><span id="harpiaTexto">Hablar con Félix el Águila</span>
+      </button>
     </div>
+  </div>
+</div></div>
 </header>
 
-<!-- CONTENIDO -->
 <main class="container py-4">
 
-    <!-- AVISO METODOLÓGICO -->
-    <div class="aviso-informativo">
-        <i class="fas fa-info-circle me-1"></i>
-        <strong>Criterio oficial: DISTANCIA.</strong>
-        El sistema construye un grafo con los 29 atractivos (cada uno conectado a sus
-        4 vecinos más cercanos y a un árbol de expansión mínima) y aplica
-        <strong>Dijkstra</strong> para encontrar el camino mínimo. Los pesos de las
-        aristas (distancia, tiempo y costo) se obtienen con <strong>OSRM</strong> sobre
-        OpenStreetMap. Dijkstra minimiza únicamente la <em>distancia</em>; el tiempo y
-        el costo (distancia × 0.15 USD/km) se reportan como métricas informativas.
-        <span id="avisoHolgura"></span>
+<div class="aviso-informativo">
+  <i class="fas fa-info-circle me-1"></i>
+  <strong>Criterio oficial de evaluación: DISTANCIA.</strong>
+  El sistema modela los 29 atractivos como un grafo de <span id="numAristas">57</span> aristas con distancias y tiempos
+  medidos en <strong>Google Maps</strong> y aplica <strong>Dijkstra</strong> para hallar el camino mínimo
+  (el orden de visita diario se resuelve con TSP exacto sobre esas distancias mínimas).
+  El <em>tiempo</em> y el <em>costo</em> (distancia × <span id="costoKm">0.15</span> USD/km) son únicamente
+  <strong>valores de referencia</strong>; no intervienen en la optimización.
+  <span id="avisoHolgura"></span>
+</div>
+
+<ul class="nav nav-pills mb-3" id="pestanas" role="tablist">
+  <li class="nav-item"><button class="nav-link active" id="tab-rutas" data-bs-toggle="pill" data-bs-target="#pane-rutas" type="button"><i class="fas fa-route me-1"></i>Rutas</button></li>
+  <li class="nav-item"><button class="nav-link" id="tab-sitios" data-bs-toggle="pill" data-bs-target="#pane-sitios" type="button"><i class="fas fa-landmark me-1"></i>Sitios turísticos</button></li>
+  <li class="nav-item"><button class="nav-link" id="tab-buscar" data-bs-toggle="pill" data-bs-target="#pane-buscar" type="button"><i class="fas fa-search me-1"></i>Hoteles y restaurantes</button></li>
+  <li class="nav-item"><button class="nav-link" id="tab-gasolina" data-bs-toggle="pill" data-bs-target="#pane-gasolina" type="button"><i class="fas fa-gas-pump me-1"></i>Gasolina</button></li>
+</ul>
+
+<div class="tab-content">
+
+<!-- ================= RUTAS ================= -->
+<div class="tab-pane fade show active" id="pane-rutas">
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3"><div class="stat-card principal d-flex align-items-center">
+      <i class="fas fa-route icono text-success"></i>
+      <div><div class="numero" id="totalDistancia">--</div><div class="etiqueta">Distancia (criterio oficial)</div></div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card ref d-flex align-items-center" style="border-left-color:var(--azul)">
+      <i class="fas fa-clock icono" style="color:var(--azul)"></i>
+      <div><div class="numero" id="totalTiempo">--</div><div class="etiqueta">Tiempo (referencia)</div></div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card ref d-flex align-items-center" style="border-left-color:#F39C12">
+      <i class="fas fa-dollar-sign icono" style="color:#F39C12"></i>
+      <div><div class="numero" id="totalCosto">--</div><div class="etiqueta">Costo (referencia)</div></div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card d-flex align-items-center" style="border-left-color:var(--morado)">
+      <i class="fas fa-location-dot icono" style="color:var(--morado)"></i>
+      <div><div class="numero" id="totalParadas">--</div><div class="etiqueta">Atractivos visitados</div></div></div></div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4"><label class="fw-bold mb-1"><i class="fas fa-play text-success me-1"></i> Origen</label>
+      <select class="form-select form-select-custom" id="origenSelect"></select></div>
+    <div class="col-md-4"><label class="fw-bold mb-1"><i class="fas fa-flag-checkered text-danger me-1"></i> Destino</label>
+      <select class="form-select form-select-custom" id="destinoSelect"></select></div>
+    <div class="col-md-4"><label class="fw-bold mb-1"><i class="fas fa-sliders-h text-primary me-1"></i> Criterio de optimización</label>
+      <div><span class="criterio-badge" title="Criterio oficial del proyecto"><i class="fas fa-ruler"></i> Distancia (oficial)</span></div></div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-8">
+      <div class="d-flex gap-2 mb-3">
+        <button class="btn-calcular" onclick="calcularRuta()"><i class="fas fa-route me-2"></i>Calcular Ruta Óptima con Dijkstra</button>
+        <button class="btn-geojson" onclick="cargarGeoJSON()"><i class="fas fa-file-upload me-2"></i>Cargar GeoJSON</button>
+        <input type="file" id="fileInput" accept=".geojson,.json" style="display:none" onchange="procesarGeoJSON(event)">
+      </div>
+      <div id="mapa"></div>
     </div>
-
-    <!-- ESTADÍSTICAS -->
-    <div class="row g-3 mb-4">
-        <div class="col-6 col-md-3">
-            <div class="stat-card d-flex align-items-center">
-                <i class="fas fa-route icono text-success"></i>
-                <div>
-                    <div class="numero" id="totalDistancia">--</div>
-                    <div class="etiqueta">Distancia total</div>
-                </div>
-            </div>
+    <div class="col-md-4">
+      <div class="ruta-info" id="panelRuta">
+        <div class="text-center text-muted py-5">
+          <i class="fas fa-road fa-3x mb-3 d-block" style="color:#dce0e5"></i>
+          <p>Selecciona origen y destino<br>para calcular la ruta óptima</p>
+          <small>Algoritmo: <strong>Dijkstra</strong></small><hr>
+          <small class="text-muted"><i class="fas fa-file-alt me-1"></i>O carga un archivo GeoJSON</small>
         </div>
-        <div class="col-6 col-md-3">
-            <div class="stat-card d-flex align-items-center" style="border-left-color:var(--azul);">
-                <i class="fas fa-clock icono" style="color:var(--azul);"></i>
-                <div>
-                    <div class="numero" id="totalTiempo">--</div>
-                    <div class="etiqueta">Tiempo total</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="stat-card d-flex align-items-center" style="border-left-color:#F39C12;">
-                <i class="fas fa-dollar-sign icono" style="color:#F39C12;"></i>
-                <div>
-                    <div class="numero" id="totalCosto">--</div>
-                    <div class="etiqueta">Costo estimado</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="stat-card d-flex align-items-center" style="border-left-color:var(--morado);">
-                <i class="fas fa-location-dot icono" style="color:var(--morado);"></i>
-                <div>
-                    <div class="numero" id="totalParadas">--</div>
-                    <div class="etiqueta">Atractivos visitados</div>
-                </div>
-            </div>
-        </div>
+      </div>
     </div>
+  </div>
 
-    <!-- SELECTORES -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <label class="fw-bold mb-1">
-                <i class="fas fa-play text-success me-1"></i> Origen
-            </label>
-            <select class="form-select form-select-custom" id="origenSelect"></select>
-        </div>
-        <div class="col-md-4">
-            <label class="fw-bold mb-1">
-                <i class="fas fa-flag-checkered text-danger me-1"></i> Destino
-            </label>
-            <select class="form-select form-select-custom" id="destinoSelect"></select>
-        </div>
-        <div class="col-md-4">
-            <label class="fw-bold mb-1">
-                <i class="fas fa-sliders-h text-primary me-1"></i> Criterio de optimización
-            </label>
-            <div class="d-flex gap-2 flex-wrap">
-                <span class="criterio-badge active" data-criterio="distancia"
-                      onclick="seleccionarCriterio('distancia')"
-                      title="Criterio oficial del proyecto">
-                    <i class="fas fa-ruler"></i> Distancia
-                </span>
-            </div>
-        </div>
+  <hr class="my-5">
+  <h3 class="text-center mb-4"><i class="fas fa-calendar-alt text-success me-2"></i>Itinerario de 7 Días</h3>
+  <p class="text-center text-muted small mb-4"><i class="fas fa-info-circle me-1"></i>
+    Cada día calcula el <strong>orden óptimo de visita</strong> (saliendo y volviendo a Penonomé) minimizando la
+    <strong>distancia</strong> con Dijkstra sobre el grafo de atractivos.</p>
+  <div class="row g-3" id="diasContainer"></div>
+</div>
+
+<!-- ================= SITIOS ================= -->
+<div class="tab-pane fade" id="pane-sitios">
+  <h4 class="mb-3"><i class="fas fa-landmark text-success me-2"></i>Información detallada de los sitios turísticos</h4>
+  <div class="row g-2 mb-3">
+    <div class="col-md-5"><input type="search" class="form-control form-select-custom" id="sitioBuscar" placeholder="Buscar por nombre, actividad o descripción..." oninput="filtrarSitios()"></div>
+    <div class="col-md-3"><select class="form-select form-select-custom" id="sitioTipo" onchange="filtrarSitios()"><option value="">Todos los tipos</option></select></div>
+    <div class="col-md-3"><select class="form-select form-select-custom" id="sitioDistrito" onchange="filtrarSitios()"><option value="">Todos los distritos</option></select></div>
+    <div class="col-md-1 d-flex align-items-center"><span class="badge bg-secondary" id="sitioContador">0</span></div>
+  </div>
+  <div class="row g-3" id="sitiosGrid"></div>
+</div>
+
+<!-- ================= BUSCAR ================= -->
+<div class="tab-pane fade" id="pane-buscar">
+  <h4 class="mb-1"><i class="fas fa-search text-success me-2"></i>Hoteles, restaurantes y otros sitios turísticos</h4>
+  <p class="text-muted small mb-3">Datos abiertos de OpenStreetMap. Los precios no figuran en OpenStreetMap: confirma tarifas con cada establecimiento.</p>
+  <div class="row g-2 mb-3">
+    <div class="col-md-3"><select class="form-select form-select-custom" id="busTipo">
+      <option value="todos">Todo</option><option value="hotel">🏨 Hoteles y alojamiento</option>
+      <option value="restaurante">🍽️ Restaurantes y cafés</option><option value="atraccion">📍 Otros sitios turísticos</option></select></div>
+    <div class="col-md-3"><select class="form-select form-select-custom" id="busCerca"></select></div>
+    <div class="col-md-2"><select class="form-select form-select-custom" id="busRadio">
+      <option value="3">3 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="20">20 km</option></select></div>
+    <div class="col-md-3"><input type="search" class="form-control form-select-custom" id="busTexto" placeholder="Nombre o tipo de cocina (opcional)" onkeydown="if(event.key==='Enter')buscarLugares()"></div>
+    <div class="col-md-1"><button class="btn btn-success w-100 h-100" onclick="buscarLugares()" title="Buscar"><i class="fas fa-search"></i></button></div>
+  </div>
+  <div id="busEstado" class="text-muted small mb-2"></div>
+  <div id="busResultados"></div>
+</div>
+
+<!-- ================= GASOLINA ================= -->
+<div class="tab-pane fade" id="pane-gasolina">
+  <h4 class="mb-3"><i class="fas fa-gas-pump text-success me-2"></i>Precios de combustible en Panamá</h4>
+  <div id="combEstado"></div>
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="table-responsive bg-white rounded-3 shadow-sm"><table class="table table-sm tabla-comb mb-0" id="tablaComb"></table></div>
+      <p class="small text-muted mt-2" id="combFuente"></p>
     </div>
-
-    <!-- MAPA Y PANEL -->
-    <div class="row g-3">
-        <div class="col-md-8">
-            <div class="d-flex gap-2 mb-3">
-                <button class="btn-calcular" onclick="calcularRuta()">
-                    <i class="fas fa-route me-2"></i>
-                    Calcular Ruta Óptima con Dijkstra
-                </button>
-                <button class="btn-geojson" onclick="cargarGeoJSON()"
-                        style="width: auto; padding: 14px 25px; margin-top: 0;">
-                    <i class="fas fa-file-upload me-2"></i>
-                    Cargar GeoJSON
-                </button>
-                <input type="file" id="fileInput" accept=".geojson,.json"
-                       style="display:none" onchange="procesarGeoJSON(event)">
-            </div>
-            <div id="mapa"></div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="ruta-info" id="panelRuta">
-                <div class="text-center text-muted py-5">
-                    <i class="fas fa-road fa-3x mb-3 d-block" style="color:#dce0e5;"></i>
-                    <p>Selecciona origen y destino<br>para calcular la ruta óptima</p>
-                    <small>Algoritmo: <strong>Dijkstra</strong></small>
-                    <hr>
-                    <small class="text-muted">
-                        <i class="fas fa-file-alt me-1"></i>
-                        O carga un archivo GeoJSON
-                    </small>
-                </div>
-            </div>
-        </div>
+    <div class="col-lg-5">
+      <div class="bg-white rounded-3 shadow-sm p-3">
+        <h6 class="fw-bold"><i class="fas fa-calculator me-1 text-success"></i>Estimador de costo de combustible</h6>
+        <label class="small mt-2">Distancia (km)</label>
+        <input type="number" class="form-control" id="estKm" min="0" step="0.1" value="100" oninput="calcularEstimador()">
+        <label class="small mt-2">Rendimiento del vehículo (km/L)</label>
+        <input type="number" class="form-control" id="estRend" min="1" step="0.1" value="10" oninput="calcularEstimador()">
+        <label class="small mt-2">Combustible</label>
+        <select class="form-select" id="estTipo" onchange="calcularEstimador()">
+          <option value="gasolina_95">Gasolina 95</option><option value="gasolina_91">Gasolina 91</option><option value="diesel">Diésel</option></select>
+        <div class="alert alert-success mt-3 mb-2" id="estResultado">--</div>
+        <button class="btn btn-outline-success btn-sm" onclick="usarUltimaRuta()"><i class="fas fa-route me-1"></i>Usar distancia de la última ruta</button>
+        <hr><div class="small text-muted" id="combModelo"></div>
+      </div>
     </div>
+  </div>
+</div>
 
-    <!-- ITINERARIO -->
-    <hr class="my-5">
-    <h3 class="text-center mb-4">
-        <i class="fas fa-calendar-alt text-success me-2"></i>
-        Itinerario de 7 Días
-    </h3>
-    <p class="text-center text-muted small mb-4">
-        <i class="fas fa-info-circle me-1"></i>
-        Cada día calcula el <strong>orden óptimo de visita</strong> (partiendo y
-        volviendo a Penonomé) y los caminos mínimos entre paradas aplicando
-        Dijkstra sobre el grafo de atractivos.
-    </p>
-    <div class="row g-3" id="diasContainer"></div>
-
+</div><!-- /tab-content -->
 </main>
 
-<!-- FOOTER -->
-<footer class="footer">
-    <div class="container text-center">
-        <p class="mb-1">
-            <i class="fas fa-university me-2"></i>
-            <strong>Universidad de Panamá</strong>
-        </p>
-        <p class="mb-1">
-            Facultad de Ciencias Naturales y Exactas · Licenciatura en Matemáticas
-        </p>
-        <p class="mb-0">
-            <small>
-                Proyecto de Tesis: Cálculo de Rutas Turísticas en Coclé
-                · Algoritmo de Dijkstra · 2026
-            </small>
-        </p>
-    </div>
-</footer>
+<!-- MODAL FICHA DE SITIO -->
+<div class="modal fade" id="modalSitio" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content" style="border-radius:15px">
+  <div class="modal-header"><h5 class="modal-title" id="modalSitioTitulo"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body" id="modalSitioCuerpo"></div>
+</div></div></div>
 
-<!-- SCRIPTS -->
+<footer class="footer"><div class="container text-center">
+  <p class="mb-1"><i class="fas fa-university me-2"></i><strong>Universidad de Panamá</strong></p>
+  <p class="mb-1">Facultad de Ciencias Naturales y Exactas · Licenciatura en Matemáticas</p>
+  <p class="mb-0"><small>Proyecto de Tesis: Cálculo de Rutas Turísticas en Coclé · Algoritmo de Dijkstra · 2026</small></p>
+</div></footer>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
 const ATRACTIVOS = {{ atractivos|tojson }};
 const CONFIG = {
-    fuenteActual: "{{ fuente_actual }}",
-    fuenteOficial: "{{ fuente_oficial }}",
-    factorHolgura: {{ factor_holgura }},
-    criterioOficial: "{{ criterio_oficial }}"
+  fuenteActual: "{{ fuente_actual }}", fuenteOficial: "{{ fuente_oficial }}",
+  factorHolgura: {{ factor_holgura }}, criterioOficial: "{{ criterio_oficial }}",
+  costoPorKm: {{ costo_por_km }}
 };
-let criterioActual = CONFIG.criterioOficial;
-let mapa = null;
-let rutaLayer = null;
-let rutaGeoJSONLayer = null;
-let marcadoresRuta = [];
-let rutaActual = [];
-let ultimaRuta = null;
-let DIAS_CACHE = null;
+const COLORES = {'Playa':'#2E86C1','Cultural':'#F39C12','Cultural/Hist.':'#F39C12','Histórico':'#F39C12','Naturaleza':'#8E44AD',
+  'Parque Nacional':'#27AE60','Cascada':'#2980B9','Balneario':'#1ABC9C','Arqueológico':'#C0392B','Montaña':'#27AE60','Aventura':'#E67E22','Hub/Ciudad':'#1D9E75'};
+let mapa=null, rutaLayer=null, rutaGeoJSONLayer=null, marcadoresRuta=[], ultimaRuta=null, SITIOS={}, COMB=null;
 
-// ============================================================
-// MAPA
-// ============================================================
-
-function initMapa() {
-    mapa = L.map('mapa').setView([8.45, -80.35], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(mapa);
-    agregarMarcadores();
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function getJSON(url,opts){
+  const r=await fetch(url,opts); const ct=r.headers.get('content-type')||'';
+  if(!ct.includes('application/json')) throw new Error(`El servidor respondió con status ${r.status} (contenido no-JSON).`);
+  const d=await r.json(); if(!r.ok||d.exito===false) throw new Error(d.error||`Error ${r.status}`); return d;
 }
 
-function agregarMarcadores() {
-    const colores = {
-        'Playa': '#2E86C1', 'Cultural': '#F39C12', 'Cultural/Hist.': '#F39C12',
-        'Histórico': '#F39C12', 'Naturaleza': '#8E44AD',
-        'Parque Nacional': '#27AE60', 'Cascada': '#2980B9',
-        'Balneario': '#1ABC9C', 'Arqueológico': '#C0392B',
-        'Montaña': '#27AE60', 'Aventura': '#E67E22', 'Hub/Ciudad': '#1D9E75'
-    };
-    for (const [id, data] of Object.entries(ATRACTIVOS)) {
-        const color = colores[data.tipo] || '#6c757d';
-        const marker = L.marker([data.lat, data.lng], {
-            icon: L.divIcon({
-                html: `<div style="background:${color};width:28px;height:28px;border-radius:50%;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;color:white;">${data.cod}</div>`,
-                iconSize: [28, 28], iconAnchor: [14, 14]
-            })
-        }).addTo(mapa);
-        marker.bindPopup(`
-            <strong>${data.nombre}</strong><br>
-            <span class="badge bg-secondary">${data.tipo}</span><br>
-            <small>Código: ${data.cod}</small>
-        `);
-        marker.on('click', function() {
-            document.getElementById('destinoSelect').value = id;
-            calcularRuta();
-        });
-    }
+// ============ MAPA ============
+function initMapa(){
+  mapa=L.map('mapa').setView([8.45,-80.35],10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(mapa);
+  for(const [id,d] of Object.entries(ATRACTIVOS)){
+    const color=COLORES[d.tipo]||'#6c757d';
+    const m=L.marker([d.lat,d.lng],{icon:L.divIcon({html:`<div style="background:${color};width:28px;height:28px;border-radius:50%;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;color:white;">${esc(d.cod)}</div>`,iconSize:[28,28],iconAnchor:[14,14]})}).addTo(mapa);
+    m.bindPopup(`<strong>${esc(d.nombre)}</strong><br><span class="badge bg-secondary">${esc(d.tipo)}</span><br>
+      <button class="btn btn-sm btn-success mt-2" onclick="rutaDesdeBase(${id})">Ruta desde Penonomé</button>
+      <button class="btn btn-sm btn-outline-secondary mt-2" onclick="abrirSitio(${id})">Ver ficha</button>`);
+  }
+}
+function rutaDesdeBase(id){
+  document.getElementById('origenSelect').value="15"; document.getElementById('destinoSelect').value=String(id);
+  if(Number(id)===15){alert('Penonomé es el origen; elige otro destino.');return;}
+  bootstrap.Tab.getOrCreateInstance(document.getElementById('tab-rutas')).show();
+  calcularRuta();
+}
+function llenarSelectores(){
+  const o=document.getElementById('origenSelect'), d=document.getElementById('destinoSelect'), c=document.getElementById('busCerca');
+  c.innerHTML='<option value="">Toda la provincia</option>';
+  for(const [id,x] of Object.entries(ATRACTIVOS)){
+    const t=`${x.cod} - ${x.nombre}`;
+    [o,d,c].forEach(sel=>{const op=document.createElement('option');op.value=id;op.textContent=(sel===c?'Cerca de: ':'')+t;sel.appendChild(op);});
+  }
+  o.value="15"; d.value="1"; c.value="15";
 }
 
-// ============================================================
-// SELECTORES Y CRITERIOS
-// ============================================================
-
-function llenarSelectores() {
-    const origen = document.getElementById('origenSelect');
-    const destino = document.getElementById('destinoSelect');
-    for (const [id, data] of Object.entries(ATRACTIVOS)) {
-        const optOrigen = document.createElement('option');
-        optOrigen.value = id;
-        optOrigen.textContent = `${data.cod} - ${data.nombre}`;
-        origen.appendChild(optOrigen);
-
-        const optDestino = document.createElement('option');
-        optDestino.value = id;
-        optDestino.textContent = `${data.cod} - ${data.nombre}`;
-        destino.appendChild(optDestino);
-    }
-    origen.value = "15";
-    destino.value = "1";
+// ============ CALCULAR RUTA ============
+async function calcularRuta(){
+  const origen=parseInt(document.getElementById('origenSelect').value), destino=parseInt(document.getElementById('destinoSelect').value);
+  if(origen===destino){alert('⚠️ El origen y el destino deben ser diferentes.');return;}
+  document.getElementById('panelRuta').innerHTML=`<div class="text-center py-4"><div class="spinner-border text-success"></div><p class="mt-3 mb-1">Calculando ruta óptima...</p><small class="text-muted">Algoritmo de Dijkstra</small></div>`;
+  try{
+    const data=await getJSON('/api/ruta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origen,destino,criterio:CONFIG.criterioOficial})});
+    ultimaRuta=data;
+    if(rutaGeoJSONLayer){mapa.removeLayer(rutaGeoJSONLayer);rutaGeoJSONLayer=null;}
+    await dibujarRuta(data); actualizarEstadisticas(data); actualizarPanel(data);
+    try{hablarHarpia(null,true);}catch(e){console.warn('Félix no pudo hablar:',e);}
+  }catch(e){
+    document.getElementById('panelRuta').innerHTML=`<div class="alert alert-danger"><strong>Error:</strong> ${esc(e.message)}<br><small class="text-muted">Revisa la consola del servidor Flask.</small></div>`;
+  }
 }
+function distHav(a,b,c,d){const R=6371,r=x=>x*Math.PI/180,dl=r(c-a),dn=r(d-b);const h=Math.sin(dl/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dn/2)**2;return R*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));}
 
-function seleccionarCriterio(criterio) {
-    criterioActual = criterio;
-    document.querySelectorAll('.criterio-badge').forEach(el => {
-        el.classList.toggle('active', el.dataset.criterio === criterio);
+async function dibujarRuta(data){
+  if(!data) return;
+  if((!data.puntos_ruta||data.puntos_ruta.length<2)&&Array.isArray(data.camino)&&data.camino.length>=2){
+    try{const g=await getJSON('/api/geometria',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({camino:data.camino})});if(Array.isArray(g.puntos_ruta))data.puntos_ruta=g.puntos_ruta;}catch(e){console.warn('Geometría no disponible, línea recta.',e);}
+  }
+  if(!data.puntos_ruta||data.puntos_ruta.length<2)
+    data.puntos_ruta=(data.nodos_ruta||[]).map(n=>[n.lat_carretera||n.lat,n.lng_carretera||n.lng]).filter(p=>p[0]!=null&&p[1]!=null);
+  if(data.puntos_ruta.length<2) return;
+  if(rutaLayer){mapa.removeLayer(rutaLayer);rutaLayer=null;}
+  marcadoresRuta.forEach(m=>mapa.removeLayer(m)); marcadoresRuta=[];
+  rutaLayer=L.polyline(data.puntos_ruta,{color:'#1D9E75',weight:5,opacity:.9,lineJoin:'round',smoothFactor:.5}).addTo(mapa);
+  const b=rutaLayer.getBounds(); if(b.isValid()) mapa.fitBounds(b,{padding:[50,50]});
+  if(Array.isArray(data.nodos_ruta)){
+    // Itinerario diario: la base (Penonomé) aparece al inicio y al final; se numera una sola vez.
+    const vistos=new Set(), n=data.nodos_ruta.length;
+    data.nodos_ruta.forEach((nodo,i)=>{
+      if(vistos.has(nodo.id)) return; vistos.add(nodo.id);
+      const esDia=data.dia!==undefined;
+      let color='#1D9E75'; if(i===0) color='#2E86C1'; else if(!esDia&&i===n-1) color='#E74C3C';
+      const etq=(esDia&&i===0)?'B':(i+1);
+      const marker=L.marker([nodo.lat_carretera||nodo.lat,nodo.lng_carretera||nodo.lng],{icon:L.divIcon({html:`<div style="background:${color};width:36px;height:36px;border-radius:50%;border:3px solid white;box-shadow:0 2px 12px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:12px;">${etq}</div>`,iconSize:[36,36],iconAnchor:[18,18]})}).addTo(mapa)
+        .bindPopup(`<strong>${esc(nodo.nombre)}</strong><br><span class="badge bg-success">${esc(nodo.cod)}</span><br><small>${esc(nodo.tipo)}</small>`);
+      marcadoresRuta.push(marker);
     });
+  }
+}
+function actualizarEstadisticas(d){
+  document.getElementById('totalDistancia').textContent=`${Number(d.distancia_km).toFixed(2)} km`;
+  document.getElementById('totalTiempo').textContent=`${Math.round(d.tiempo_min)} min`;
+  document.getElementById('totalCosto').textContent=`$${Number(d.costo).toFixed(2)}`;
+  document.getElementById('totalParadas').textContent=d.nodos_visitados??new Set((d.nodos_ruta||[]).map(n=>n.id)).size;
+}
+function etiquetaDePaso(n){return n.es_parada===false?' <span class="badge bg-light text-dark border ms-1">de paso</span>':'';}
+function nombreNodo(id){return ATRACTIVOS[id]?ATRACTIVOS[id].nombre:id;}
+function bloqueMetricas(d){
+  const tc=Number(d.tiempo_conduccion_min||d.tiempo_min||0), tt=Number(d.tiempo_min||tc), h=tt-tc;
+  return `<div class="mb-3">
+    <div class="p-2 rounded mb-2" style="background:#e9f8f2"><i class="fas fa-road text-success"></i> <strong style="font-size:1.15rem">${Number(d.distancia_km).toFixed(2)} km</strong> <span class="badge bg-success ms-1">criterio oficial</span></div>
+    <div class="d-flex justify-content-between small text-muted"><span><i class="fas fa-clock text-primary"></i> ${Number(d.tiempo_min).toFixed(0)} min <em>(ref.)</em></span><span><i class="fas fa-dollar-sign text-warning"></i> $${Number(d.costo).toFixed(2)} <em>(ref.)</em></span></div>
+    ${h>0.1?`<div class="small text-muted mt-1"><i class="fas fa-info-circle me-1"></i>${tc.toFixed(0)} min conducción + ${h.toFixed(0)} min holgura (×${CONFIG.factorHolgura})</div>`:''}</div>`;
+}
+function actualizarPanel(d){
+  let html=`<h6 class="fw-bold text-success mb-3"><i class="fas fa-route me-2"></i>Ruta óptima <span class="badge bg-success ms-2">Dijkstra</span></h6>
+    <div class="mb-2"><span class="badge bg-success" title="Distancias y tiempos del grafo oficial (Google Maps)"><i class="fas fa-check-circle me-1"></i>Métricas: ${esc(d.fuente_metricas)}</span></div>
+    <div class="alert alert-light border mb-2"><strong>Criterio:</strong> Distancia mínima</div>${bloqueMetricas(d)}
+    <div class="border-top pt-3"><p class="mb-1"><strong>Origen:</strong> ${esc(d.nodos_ruta?.[0]?.nombre||'No disponible')}</p>
+    <p class="mb-1"><strong>Destino:</strong> ${esc(d.nodos_ruta?.[d.nodos_ruta.length-1]?.nombre||'No disponible')}</p></div>`;
+  if(d.pasa_por&&d.pasa_por.length) html+=`<p class="small text-muted mb-1"><i class="fas fa-arrow-right-arrow-left me-1"></i>Pasa por: ${d.pasa_por.map(i=>esc(nombreNodo(i))).join(' → ')}</p>`;
+  html+=`<hr><h6 class="fw-bold">Camino óptimo (Dijkstra)</h6>`;
+  (d.nodos_ruta||[]).forEach((n,i)=>{html+=`<div class="paso"><span class="indice">${i+1}</span><div><strong>${esc(n.nombre)}</strong>${etiquetaDePaso(n)}<br><small class="text-muted">Nodo: ${esc(n.cod)}</small></div></div>`;});
+  if(Array.isArray(d.segmentos)&&d.segmentos.length>1){
+    html+=`<hr><h6 class="fw-bold">Detalle de los tramos</h6>`;
+    d.segmentos.forEach((t,i)=>{html+=`<div class="border rounded p-2 mb-2"><small><strong>${i+1}.</strong> ${esc(nombreNodo(t.origen))} → ${esc(nombreNodo(t.destino))}</small><br><small class="text-muted"><strong>${Number(t.distancia_km).toFixed(2)} km</strong> · ${Number(t.tiempo_min).toFixed(1)} min · $${Number(t.costo).toFixed(2)}</small></div>`;});
+  }
+  document.getElementById('panelRuta').innerHTML=html;
 }
 
-// ============================================================
-// CALCULAR RUTA
-// ============================================================
-
-async function calcularRuta() {
-    const origen = parseInt(document.getElementById('origenSelect').value);
-    const destino = parseInt(document.getElementById('destinoSelect').value);
-    if (origen === destino) { alert('⚠️ El origen y el destino deben ser diferentes.'); return; }
-
-    const panel = document.getElementById('panelRuta');
-    panel.innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border text-success" role="status"></div>
-            <p class="mt-3 mb-1">Calculando ruta óptima...</p>
-            <small class="text-muted">Algoritmo de Dijkstra</small>
-        </div>
-    `;
-
-    try {
-        const data = await obtenerRutaDijkstra(origen, destino, criterioActual);
-        ultimaRuta = data;
-        rutaActual = Array.isArray(data.camino) ? data.camino : [origen, destino];
-        if (rutaGeoJSONLayer) { mapa.removeLayer(rutaGeoJSONLayer); rutaGeoJSONLayer = null; }
-        await dibujarRuta(data);
-        actualizarEstadisticas(data);
-        actualizarPanel(data);
-        try { hablarHarpia(null, true); } catch (e) { console.warn('Rapas no pudo hablar:', e); }
-    } catch (error) {
-        console.error('Error:', error);
-        document.getElementById('panelRuta').innerHTML = `
-            <div class="alert alert-danger">
-                <strong>Error:</strong> ${error.message}<br>
-                <small class="text-muted">Revisa la consola del servidor Flask para más detalles.</small>
-            </div>
-        `;
-    }
+// ============ GEOJSON ============
+function cargarGeoJSON(){document.getElementById('fileInput').click();}
+function procesarGeoJSON(ev){
+  const file=ev.target.files[0]; if(!file) return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const gj=JSON.parse(e.target.result);
+      if(!(gj.type==='Feature'&&gj.geometry&&gj.geometry.type==='LineString')){alert('El archivo debe ser un Feature de tipo LineString');return;}
+      const pts=gj.geometry.coordinates.map(c=>[c[1],c[0]]);
+      if(rutaLayer){mapa.removeLayer(rutaLayer);rutaLayer=null;} if(rutaGeoJSONLayer){mapa.removeLayer(rutaGeoJSONLayer);}
+      marcadoresRuta.forEach(m=>mapa.removeLayer(m)); marcadoresRuta=[];
+      rutaGeoJSONLayer=L.polyline(pts,{color:'#E74C3C',weight:5,opacity:.9,dashArray:'10, 10'}).addTo(mapa);
+      const b=rutaGeoJSONLayer.getBounds(); if(b.isValid()) mapa.fitBounds(b,{padding:[50,50]});
+      let km=0; for(let i=0;i<pts.length-1;i++) km+=distHav(pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1]);
+      const tt=km/40*60*CONFIG.factorHolgura;
+      document.getElementById('totalDistancia').textContent=`${km.toFixed(2)} km`;
+      document.getElementById('totalTiempo').textContent=`${Math.round(tt)} min`;
+      document.getElementById('totalCosto').textContent=`$${(km*CONFIG.costoPorKm).toFixed(2)}`;
+      document.getElementById('totalParadas').textContent='GeoJSON';
+      document.getElementById('panelRuta').innerHTML=`<h6 class="fw-bold text-danger mb-3"><i class="fas fa-file-alt me-2"></i>Ruta GeoJSON cargada</h6>
+        <div class="alert alert-warning small"><i class="fas fa-info-circle me-1"></i>Distancia en línea recta entre puntos del archivo (aproximada); tiempo estimado a 40 km/h.</div>
+        <p><strong>${km.toFixed(2)} km</strong> · ${Math.round(tt)} min (ref.) · $${(km*CONFIG.costoPorKm).toFixed(2)} (ref.)</p>
+        <p><strong>Puntos:</strong> ${pts.length}</p><p><strong>Archivo:</strong> ${esc(file.name)}</p>
+        <button class="btn btn-danger btn-sm w-100 mt-2" onclick="limpiarRutaGeoJSON()"><i class="fas fa-trash me-1"></i> Eliminar ruta</button>`;
+    }catch(err){alert('Error al procesar el archivo GeoJSON: '+err.message);}
+  };
+  rd.readAsText(file); ev.target.value='';
+}
+function limpiarRutaGeoJSON(){
+  if(rutaGeoJSONLayer){mapa.removeLayer(rutaGeoJSONLayer);rutaGeoJSONLayer=null;}
+  ['totalDistancia','totalTiempo','totalCosto','totalParadas'].forEach(i=>document.getElementById(i).textContent='--');
+  document.getElementById('panelRuta').innerHTML=`<div class="text-center text-muted py-5"><i class="fas fa-road fa-3x mb-3 d-block" style="color:#dce0e5"></i><p>Ruta GeoJSON eliminada</p><small>Selecciona origen y destino para calcular una nueva ruta</small></div>`;
 }
 
-async function obtenerRutaDijkstra(origen, destino, criterio) {
-    const respuesta = await fetch('/api/ruta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origen, destino, criterio })
+// ============ FÉLIX EL ÁGUILA (VOZ) ============
+let harpiaHablando=false, vozActual=null, saludoDado=false, esperandoSaludo=false;
+const VOZ_MASCULINA=/jorge|diego|juan|carlos|pablo|raul|raúl|enrique|miguel|alvaro|álvaro|alonso|tomas|tomás|andres|andrés|antonio|jaime|luis|\bmale\b|hombre|masculin/i;
+const VOZ_FEMENINA=/monica|mónica|paulina|helena|laura|sabina|esperanza|angelica|angélica|marisol|dalia|elvira|elena|female|mujer|femenin|zira|google español/i;
+const REGIONES=['es-pa','es-mx','es-us','es-co','es-419','es-ar','es-es'];
+function configurarVoz(u){
+  u.lang='es-PA'; u.rate=.95;
+  const voces=window.speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.toLowerCase().replace('_','-').startsWith('es'));
+  const ord=v=>{const i=REGIONES.indexOf(v.lang.toLowerCase().replace('_','-'));return i===-1?99:i;};
+  const m=voces.filter(v=>VOZ_MASCULINA.test(v.name)&&!VOZ_FEMENINA.test(v.name)).sort((a,b)=>ord(a)-ord(b));
+  if(m.length){u.voice=m[0];u.lang=m[0].lang;u.pitch=.9;}else{if(voces.length){u.voice=voces[0];u.lang=voces[0].lang;}u.pitch=.6;}
+}
+function estadoFelix(hablando){
+  harpiaHablando=hablando;
+  document.getElementById('btnHarpia').classList.toggle('escuchando',hablando);
+  document.getElementById('harpia').classList.toggle('hablando',hablando);
+  document.getElementById('harpiaTexto').textContent=hablando?'Detener a Félix el Águila':'Hablar con Félix el Águila';
+}
+function hablarHarpia(evento,automatico){
+  if(!window.speechSynthesis){if(!automatico)alert('Tu navegador no soporta síntesis de voz.');return;}
+  if(harpiaHablando){window.speechSynthesis.cancel();estadoFelix(false);if(!automatico)return;}
+  if(automatico) window.speechSynthesis.cancel();
+  saludoDado=true; let msg='';
+  if(rutaGeoJSONLayer){
+    msg=`¡Hola! Soy Félix el Águila. Tienes cargada una ruta desde un archivo GeoJSON. La distancia total es de ${document.getElementById('totalDistancia').textContent}. ¡Disfruta tu recorrido por la provincia de Coclé!`;
+  }else if(ultimaRuta){
+    const nr=ultimaRuta.nodos_ruta||[], o=nr[0]?.nombre||'el punto de origen', d=nr[nr.length-1]?.nombre||'el punto de destino';
+    const n=ultimaRuta.nodos_visitados??nr.length;
+    msg=(automatico?'':'¡Hola! Soy Félix el Águila, y te acompañaré en este recorrido. ')+
+      `Usando el algoritmo de Dijkstra, se calculó la ruta óptima según el criterio oficial: la distancia mínima. `+
+      (ultimaRuta.dia!==undefined?`Es el itinerario del día ${ultimaRuta.dia}, con salida y regreso en Penonomé, `:`El recorrido inicia en ${o} y termina en ${d}, `)+
+      `pasando por ${n} atractivos. La distancia total es de ${Number(ultimaRuta.distancia_km).toFixed(2)} kilómetros. `+
+      `Como referencia, el tiempo estimado es de ${Math.round(ultimaRuta.tiempo_min)} minutos y el costo aproximado es de ${Number(ultimaRuta.costo).toFixed(2)} dólares. ¡Disfruta tu recorrido por la provincia de Coclé!`;
+  }else{
+    msg=`¡Hola! Soy Félix el Águila. Aún no has calculado ninguna ruta. Selecciona un origen y un destino, y presiona el botón de calcular ruta óptima con Dijkstra. Después podrás hacerme clic de nuevo y te contaré todos los detalles de tu recorrido por Coclé.`;
+  }
+  const u=new SpeechSynthesisUtterance(msg); configurarVoz(u); vozActual=u;
+  u.onstart=()=>estadoFelix(true);
+  u.onend=u.onerror=()=>{if(vozActual===u)estadoFelix(false);};
+  window.speechSynthesis.speak(u);
+}
+function saludoInicial(){
+  if(!window.speechSynthesis||saludoDado||harpiaHablando) return; saludoDado=true;
+  let empezo=false;
+  const u=new SpeechSynthesisUtterance('¡Hola! Soy Félix el Águila, te doy la bienvenida a las rutas turísticas de Coclé. Selecciona un origen y un destino, y presiona calcular ruta óptima con Dijkstra.');
+  configurarVoz(u); vozActual=u;
+  u.onstart=()=>{empezo=true;estadoFelix(true);};
+  u.onend=()=>{if(vozActual===u)estadoFelix(false);};
+  u.onerror=e=>{if(vozActual===u)estadoFelix(false);if(e&&e.error==='not-allowed'){saludoDado=false;esperarInteraccion();}};
+  window.speechSynthesis.speak(u);
+  setTimeout(()=>{if(!empezo&&saludoDado&&vozActual===u){window.speechSynthesis.cancel();saludoDado=false;esperarInteraccion();}},1500);
+}
+function esperarInteraccion(){
+  if(esperandoSaludo) return; esperandoSaludo=true;
+  const ev=['click','touchstart','keydown'];
+  const f=()=>{ev.forEach(e=>document.removeEventListener(e,f));esperandoSaludo=false;saludoInicial();};
+  ev.forEach(e=>document.addEventListener(e,f));
+}
+
+// ============ DÍAS ============
+async function cargarDias(){
+  try{
+    const dias=await (await fetch('/api/dias')).json(); const c=document.getElementById('diasContainer'); c.innerHTML='';
+    dias.forEach(dia=>{
+      const s=dia.destinos.map(id=>ATRACTIVOS[id].cod).join(' → ');
+      c.innerHTML+=`<div class="col-md-3 col-6"><div class="card card-dia shadow-sm" onclick="cargarDia(${dia.dia})"><div class="card-body text-center p-3">
+        <span class="badge bg-success rounded-pill mb-2">Día ${dia.dia}</span><h6 class="card-title mb-1" style="font-size:.9rem">${esc(dia.zona)}</h6>
+        <small class="text-muted" style="font-size:.7rem">${esc(s)}</small><div class="mt-2"><span class="badge bg-light text-dark">${dia.destinos.length} lugares</span></div></div></div></div>`;
     });
-
-    const ct = respuesta.headers.get('content-type') || '';
-    if (!ct.includes('application/json')) {
-        const texto = await respuesta.text();
-        console.error('Respuesta no-JSON del servidor:', texto.substring(0, 500));
-        throw new Error(`El servidor respondió con status ${respuesta.status} y contenido no-JSON. Revisa la consola del servidor Flask.`);
-    }
-
-    const data = await respuesta.json();
-    if (!respuesta.ok || !data.exito) {
-        throw new Error(data.error || `Error ${respuesta.status}`);
-    }
-    return data;
+  }catch(e){console.error('Error cargando días:',e);}
+}
+async function cargarDia(n){
+  document.getElementById('panelRuta').innerHTML=`<div class="text-center py-4"><div class="spinner-border text-success"></div><p class="mt-3 mb-1">Calculando itinerario óptimo del día ${n}...</p><small class="text-muted">Orden de visita con Dijkstra (distancia)</small></div>`;
+  try{
+    const d=await getJSON(`/api/dia/${n}`); ultimaRuta=d;
+    if(rutaGeoJSONLayer){mapa.removeLayer(rutaGeoJSONLayer);rutaGeoJSONLayer=null;}
+    await dibujarRuta(d); actualizarEstadisticas(d); actualizarPanelDia(d);
+    try{hablarHarpia(null,true);}catch(e){}
+  }catch(e){document.getElementById('panelRuta').innerHTML=`<div class="alert alert-danger"><strong>Error:</strong> ${esc(e.message)}</div>`;}
+}
+function actualizarPanelDia(d){
+  let html=`<h6 class="fw-bold text-success mb-3"><i class="fas fa-calendar-day me-2"></i>Día ${d.dia} <span class="badge bg-success ms-2">Orden óptimo (Dijkstra)</span></h6>
+    <div class="alert alert-light border mb-2"><strong>Zona:</strong> ${esc(d.zona)}<br><strong>Criterio:</strong> Distancia mínima</div>${bloqueMetricas(d)}<hr><h6 class="fw-bold">Orden óptimo de visita</h6>`;
+  (d.nodos_ruta||[]).forEach((n,i)=>{html+=`<div class="paso"><span class="indice">${i===0?'B':i}</span><div><strong>${esc(n.nombre)}</strong>${i===0?' <span class="badge bg-light text-dark border ms-1">base</span>':''}${i===d.nodos_ruta.length-1?' <span class="badge bg-light text-dark border ms-1">regreso</span>':''}<br><small class="text-muted">Nodo: ${esc(n.cod)}</small></div></div>`;});
+  if(Array.isArray(d.segmentos)){
+    html+=`<hr><h6 class="fw-bold">Etapas (camino mínimo de Dijkstra)</h6>`;
+    d.segmentos.forEach((t,i)=>{
+      const p=(t.pasa_por&&t.pasa_por.length)?`<br><small class="text-muted">pasa por ${t.pasa_por.map(x=>esc(nombreNodo(x))).join(', ')}</small>`:'';
+      html+=`<div class="border rounded p-2 mb-2"><small><strong>${i+1}.</strong> ${esc(nombreNodo(t.origen))} → ${esc(nombreNodo(t.destino))}</small>${p}<br><small class="text-muted"><strong>${Number(t.distancia_km).toFixed(2)} km</strong> · ${Number(t.tiempo_min).toFixed(0)} min · $${Number(t.costo).toFixed(2)}</small></div>`;
+    });
+  }
+  document.getElementById('panelRuta').innerHTML=html;
 }
 
-function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) ** 2 +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+// ============ SITIOS TURÍSTICOS ============
+async function cargarSitios(){
+  try{
+    SITIOS=await getJSON('/api/sitios'); const arr=Object.values(SITIOS);
+    const tipos=[...new Set(arr.map(s=>s.tipo))].sort(), dist=[...new Set(arr.map(s=>s.distrito).filter(Boolean))].sort();
+    document.getElementById('sitioTipo').innerHTML+=tipos.map(t=>`<option>${esc(t)}</option>`).join('');
+    document.getElementById('sitioDistrito').innerHTML+=dist.map(t=>`<option>${esc(t)}</option>`).join('');
+    filtrarSitios();
+  }catch(e){document.getElementById('sitiosGrid').innerHTML=`<div class="alert alert-danger">No se pudieron cargar las fichas: ${esc(e.message)}</div>`;}
+}
+function filtrarSitios(){
+  const q=document.getElementById('sitioBuscar').value.trim().toLowerCase(), t=document.getElementById('sitioTipo').value, d=document.getElementById('sitioDistrito').value;
+  const lista=Object.values(SITIOS).filter(s=>(!t||s.tipo===t)&&(!d||s.distrito===d)&&(!q||[s.nombre,s.resumen,s.detalle,(s.actividades||[]).join(' ')].join(' ').toLowerCase().includes(q)));
+  document.getElementById('sitioContador').textContent=lista.length;
+  document.getElementById('sitiosGrid').innerHTML=lista.length?lista.map(s=>`<div class="col-md-4 col-sm-6"><div class="card sitio-card" onclick="abrirSitio(${s.id})"><div class="card-body">
+    <span class="tag-tipo" style="background:${COLORES[s.tipo]||'#6c757d'}">${esc(s.tipo)}</span> <span class="badge bg-light text-dark border">${esc(s.cod)}</span>
+    <h6 class="fw-bold mt-2 mb-1">${esc(s.nombre)}</h6><small class="text-muted d-block mb-1"><i class="fas fa-location-dot me-1"></i>${esc(s.distrito)}</small>
+    <small>${esc(s.resumen)}</small></div></div></div>`).join(''):'<p class="text-muted">Sin resultados.</p>';
+}
+async function abrirSitio(id){
+  let s=SITIOS[id]; let dias=[];
+  try{const r=await getJSON('/api/sitio/'+id); s=r; dias=r.dias||[];}catch(e){}
+  if(!s) return;
+  document.getElementById('modalSitioTitulo').innerHTML=`${esc(s.nombre)} <span class="badge ms-2" style="background:${COLORES[s.tipo]||'#6c757d'}">${esc(s.tipo)}</span>`;
+  const li=a=>(a||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+  document.getElementById('modalSitioCuerpo').innerHTML=`
+    <p>${esc(s.detalle)}</p>
+    <div class="row g-2 small">
+      <div class="col-md-6"><strong><i class="fas fa-map-pin text-success me-1"></i>Distrito:</strong> ${esc(s.distrito)}</div>
+      <div class="col-md-6"><strong><i class="fas fa-hourglass-half text-success me-1"></i>Duración sugerida:</strong> ${esc(s.duracion)}</div>
+      <div class="col-md-6"><strong><i class="fas fa-sun text-success me-1"></i>Mejor época:</strong> ${esc(s.mejor_epoca)}</div>
+      <div class="col-md-6"><strong><i class="fas fa-calendar-day text-success me-1"></i>En el itinerario:</strong> ${dias.length?dias.map(d=>'Día '+d).join(', '):'—'}</div>
+      <div class="col-md-6"><strong><i class="fas fa-clock text-success me-1"></i>Horario:</strong> ${esc(s.horario)}</div>
+      <div class="col-md-6"><strong><i class="fas fa-ticket text-success me-1"></i>Tarifa:</strong> ${esc(s.tarifa)}</div>
+    </div>
+    ${(s.actividades||[]).length?`<h6 class="fw-bold mt-3">Qué hacer</h6><ul class="small">${li(s.actividades)}</ul>`:''}
+    ${s.consejo?`<div class="alert alert-warning small"><i class="fas fa-lightbulb me-1"></i><strong>Consejo:</strong> ${esc(s.consejo)}</div>`:''}
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener" href="${esc(s.google_maps)}"><i class="fas fa-map me-1"></i>Abrir en Google Maps</a>
+      ${s.id!==15?`<button class="btn btn-success btn-sm" data-bs-dismiss="modal" onclick="rutaDesdeBase(${s.id})"><i class="fas fa-route me-1"></i>Ruta desde Penonomé</button>`:''}
+      <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal" onclick="buscarCerca(${s.id})"><i class="fas fa-hotel me-1"></i>Hoteles y restaurantes cerca</button>
+    </div>`;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('modalSitio')).show();
+}
+function buscarCerca(id){
+  document.getElementById('busCerca').value=String(id);
+  bootstrap.Tab.getOrCreateInstance(document.getElementById('tab-buscar')).show(); buscarLugares();
 }
 
-// ============================================================
-// DIBUJAR RUTA (robusto, con fallback)
-// ============================================================
-
-async function dibujarRuta(data) {
-    if (!data) return;
-
-    // 1) Si el backend no envió geometría, pedirla a /api/geometria
-    if ((!data.puntos_ruta || data.puntos_ruta.length < 2) &&
-        Array.isArray(data.camino) && data.camino.length >= 2) {
-        try {
-            const r = await fetch('/api/geometria', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ camino: data.camino })
-            });
-            const ct = r.headers.get('content-type') || '';
-            if (r.ok && ct.includes('application/json')) {
-                const g = await r.json();
-                if (g.exito && Array.isArray(g.puntos_ruta)) {
-                    data.puntos_ruta = g.puntos_ruta;
-                }
-            } else {
-                console.warn('Geometría no disponible (status', r.status, '). Se usará línea recta.');
-            }
-        } catch (e) {
-            console.warn('Error obteniendo geometría por carretera:', e);
-        }
-    }
-
-    // 2) Fallback: línea recta entre nodos
-    if (!data.puntos_ruta || data.puntos_ruta.length < 2) {
-        data.puntos_ruta = (data.nodos_ruta || [])
-            .map(n => [n.lat_carretera || n.lat, n.lng_carretera || n.lng])
-            .filter(p => p[0] != null && p[1] != null);
-    }
-
-    if (data.puntos_ruta.length < 2) {
-        console.warn('No hay puntos suficientes para dibujar la ruta');
-        return;
-    }
-
-    // 3) Limpiar capas anteriores
-    if (rutaLayer) { mapa.removeLayer(rutaLayer); rutaLayer = null; }
-    marcadoresRuta.forEach(m => mapa.removeLayer(m));
-    marcadoresRuta = [];
-
-    // 4) Dibujar polilínea
-    rutaLayer = L.polyline(data.puntos_ruta, {
-        color: '#1D9E75', weight: 5, opacity: 0.9,
-        lineJoin: 'round', smoothFactor: 0.5
-    }).addTo(mapa);
-
-    const bounds = rutaLayer.getBounds();
-    if (bounds.isValid()) mapa.fitBounds(bounds, { padding: [50, 50] });
-
-    // 5) Marcadores numerados
-    if (Array.isArray(data.nodos_ruta)) {
-        data.nodos_ruta.forEach((nodo, indice) => {
-            let color = '#1D9E75';
-            if (indice === 0) color = '#2E86C1';
-            else if (indice === data.nodos_ruta.length - 1) color = '#E74C3C';
-            const lat = nodo.lat_carretera || nodo.lat;
-            const lng = nodo.lng_carretera || nodo.lng;
-            const icono = L.divIcon({
-                html: `<div style="background:${color};width:36px;height:36px;border-radius:50%;border:3px solid white;box-shadow:0 2px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:12px;">${indice + 1}</div>`,
-                iconSize: [36, 36], iconAnchor: [18, 18]
-            });
-            const marker = L.marker([lat, lng], { icon: icono }).addTo(mapa)
-                .bindPopup(`<strong>${indice + 1}. ${nodo.nombre}</strong><br><span class="badge bg-success">${nodo.cod}</span><br><small>${nodo.tipo}</small>`);
-            marcadoresRuta.push(marker);
-        });
-    }
+// ============ BÚSQUEDA ============
+const ETQ_CAT={hotel:'🏨 Alojamiento',restaurante:'🍽️ Gastronomía',atraccion:'📍 Sitio turístico'};
+async function buscarLugares(){
+  const tipo=document.getElementById('busTipo').value, cerca=document.getElementById('busCerca').value, radio=document.getElementById('busRadio').value, q=document.getElementById('busTexto').value.trim();
+  const est=document.getElementById('busEstado'), out=document.getElementById('busResultados');
+  est.innerHTML='<span class="spinner-border spinner-border-sm text-success me-2"></span>Consultando OpenStreetMap...'; out.innerHTML='';
+  const p=new URLSearchParams({tipo,radio,q}); if(cerca) p.set('cerca',cerca);
+  try{
+    const r=await getJSON('/api/buscar?'+p.toString());
+    est.innerHTML=`${r.total} resultado(s)${r.total>60?' (se muestran 60)':''} · Fuente: ${esc(r.fuente)}${cerca?` · cerca de ${esc(nombreNodo(cerca))} (${esc(radio)} km)`:' · toda la provincia'}<br><i class="fas fa-info-circle"></i> ${esc(r.nota)}`;
+    out.innerHTML=r.resultados.length?r.resultados.map(x=>`<div class="res-item ${esc(x.categoria)}"><div class="d-flex justify-content-between flex-wrap">
+      <div><strong>${esc(x.nombre)}</strong> <span class="badge bg-light text-dark border">${esc(x.subtipo)}</span>${x.estrellas?` <span class="text-warning">${esc(x.estrellas)}★</span>`:''}
+      <div class="small text-muted">${ETQ_CAT[x.categoria]||''}${x.cocina?' · '+esc(x.cocina):''}${x.direccion?' · '+esc(x.direccion):''}${x.distancia_km!=null?' · a '+x.distancia_km+' km':''}</div>
+      ${x.horario?`<div class="small"><i class="fas fa-clock me-1"></i>${esc(x.horario)}</div>`:''}${x.telefono?`<div class="small"><i class="fas fa-phone me-1"></i>${esc(x.telefono)}</div>`:''}</div>
+      <div class="d-flex gap-2 align-items-start mt-1"><a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="${esc(x.google_maps)}"><i class="fas fa-map"></i> Mapa</a>
+      ${x.web?`<a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="${esc(x.web)}"><i class="fas fa-globe"></i> Web</a>`:''}</div></div></div>`).join('')
+      :'<div class="alert alert-secondary">Sin resultados. Prueba aumentar el radio, cambiar el tipo o quitar el texto. OpenStreetMap puede no tener todos los negocios registrados.</div>';
+  }catch(e){est.innerHTML='';out.innerHTML=`<div class="alert alert-danger"><strong>Error:</strong> ${esc(e.message)}</div>`;}
 }
 
-function actualizarEstadisticas(data) {
-    document.getElementById('totalDistancia').textContent = `${Number(data.distancia_km).toFixed(2)} km`;
-    document.getElementById('totalTiempo').textContent = `${Math.round(data.tiempo_min)} min`;
-    document.getElementById('totalCosto').textContent = `$${Number(data.costo).toFixed(2)}`;
-    document.getElementById('totalParadas').textContent = data.nodos_ruta.length;
+// ============ COMBUSTIBLE ============
+const NOMB_COMB={gasolina_95:'Gasolina 95',gasolina_91:'Gasolina 91',diesel:'Diésel (ULS)'};
+async function cargarCombustible(){
+  try{
+    COMB=await getJSON('/api/combustible');
+    const f=s=>new Date(s).toLocaleString('es-PA',{dateStyle:'long',timeStyle:'short',timeZone:'America/Panama'});
+    document.getElementById('combEstado').innerHTML=COMB.vigente===false
+      ?`<div class="alert alert-danger"><i class="fas fa-triangle-exclamation me-1"></i><strong>Precios vencidos</strong> (vigentes hasta ${esc(f(COMB.vigente_hasta))}). Actualiza <code>combustible.json</code> con el nuevo comunicado de la Secretaría de Energía.</div>`
+      :`<div class="alert alert-success"><i class="fas fa-circle-check me-1"></i>Precios máximos vigentes desde <strong>${esc(f(COMB.vigente_desde))}</strong> hasta <strong>${esc(f(COMB.vigente_hasta))}</strong>. Se actualizan cada 14 días.</div>`;
+    let h='<thead><tr><th>Localidad</th><th>Gasolina 95</th><th>Gasolina 91</th><th>Diésel</th></tr></thead><tbody>';
+    for(const [loc,p] of Object.entries(COMB.localidades)){
+      const cls=loc===COMB.localidad_proyecto?' class="proy"':'';
+      h+=`<tr><td${cls}>${esc(loc)}${loc===COMB.localidad_proyecto?' <span class="badge bg-success">zona del proyecto</span>':''}</td>`+['gasolina_95','gasolina_91','diesel'].map(k=>`<td${cls}>B/. ${p[k].litro.toFixed(3)}/L<br><small class="text-muted">B/. ${p[k].galon.toFixed(2)}/gal</small></td>`).join('')+'</tr>';
+    }
+    document.getElementById('tablaComb').innerHTML=h+'</tbody>';
+    document.getElementById('combFuente').innerHTML=`Fuente: ${esc(COMB.fuente)}. ${esc(COMB.nota)} <a href="${esc(COMB.url_oficial)}" target="_blank" rel="noopener">Sitio oficial</a>${COMB.url_referencia?` · <a href="${esc(COMB.url_referencia)}" target="_blank" rel="noopener">Lista por localidad</a>`:''}`;
+    document.getElementById('estRend').value=COMB.rendimiento_equivalente_km_l;
+    document.getElementById('combModelo').innerHTML=`<strong>Nota metodológica:</strong> el costo de referencia del modelo es distancia × ${COMB.costo_por_km_modelo} USD/km. Con gasolina 95 en la zona del proyecto, esa tarifa equivale a un vehículo de ≈ ${COMB.rendimiento_equivalente_km_l} km/L (≈ ${COMB.rendimiento_equivalente_km_gal} km/galón). El costo es solo referencia; el criterio oficial es la distancia.`;
+    calcularEstimador();
+  }catch(e){document.getElementById('combEstado').innerHTML=`<div class="alert alert-danger">No se pudieron cargar los precios: ${esc(e.message)}</div>`;}
+}
+function calcularEstimador(){
+  if(!COMB) return;
+  const km=parseFloat(document.getElementById('estKm').value)||0, r=parseFloat(document.getElementById('estRend').value)||0, t=document.getElementById('estTipo').value;
+  const precio=COMB.localidades[COMB.localidad_proyecto][t].litro;
+  if(r<=0){document.getElementById('estResultado').textContent='Ingresa un rendimiento mayor que 0.';return;}
+  const litros=km/r;
+  document.getElementById('estResultado').innerHTML=`<strong>${litros.toFixed(1)} L</strong> · <strong>B/. ${(litros*precio).toFixed(2)}</strong><br><small>${esc(NOMB_COMB[t])} a B/. ${precio.toFixed(3)}/L (${esc(COMB.localidad_proyecto)}). Modelo (ref.): $${(km*CONFIG.costoPorKm).toFixed(2)}</small>`;
+}
+function usarUltimaRuta(){
+  if(!ultimaRuta){alert('Aún no has calculado una ruta.');return;}
+  document.getElementById('estKm').value=Number(ultimaRuta.distancia_km).toFixed(1); calcularEstimador();
 }
 
-// Etiqueta para atractivos por los que solo se pasa (no son parada)
-function etiquetaDePaso(nodo) {
-    return nodo.es_parada === false
-        ? ' <span class="badge bg-light text-dark border ms-1">de paso</span>'
-        : '';
+// ============ FUENTE ============
+async function cargarFuente(){
+  try{
+    const d=await (await fetch('/api/fuente')).json(), b=document.getElementById('badgeFuente'), s=document.getElementById('fuenteSelect');
+    s.value=d.fuente; b.style.background=d.es_oficial?'#27AE60':(d.fuente==='osm'?'#E67E22':'#2E86C1');
+    b.title=`Fuente activa: ${d.fuente_nombre}`+(d.es_oficial?' (oficial del proyecto)':' (modo de sensibilidad, no oficial)')+` · ${d.total_atractivos} atractivos`;
+    document.getElementById('costoKm').textContent=d.costo_por_km;
+    if(d.factor_holgura&&d.factor_holgura!==1.0) document.getElementById('avisoHolgura').innerHTML=`<br><i class="fas fa-stopwatch me-1"></i>El tiempo mostrado incluye un factor de holgura ×${d.factor_holgura} (+${Math.round((d.factor_holgura-1)*100)}%).`;
+    const g=await (await fetch('/api/grafo')).json(); if(g.exito) document.getElementById('numAristas').textContent=g.num_aristas;
+    if(!d.es_oficial) document.getElementById('avisoHolgura').innerHTML+=`<br><i class="fas fa-triangle-exclamation me-1"></i><strong>Modo sensibilidad (OpenStreetMap):</strong> grafo generado con pesos de OSRM; no es el grafo oficial.`;
+  }catch(e){console.warn('No se pudo obtener la fuente:',e);}
+}
+async function cambiarFuente(nueva){
+  const s=document.getElementById('fuenteSelect'), b=document.getElementById('badgeFuente');
+  if(nueva!==CONFIG.fuenteOficial){
+    if(!confirm(`⚠️ Estás cambiando a OpenStreetMap.\n\nLa fuente OFICIAL del proyecto es ${CONFIG.fuenteOficial.toUpperCase()}.\nEste modo es solo para análisis de sensibilidad: el servidor generará un grafo distinto con pesos de OSRM y los resultados pueden variar.\n\n¿Deseas continuar?`)){s.value=CONFIG.fuenteActual;return;}
+  }
+  b.style.background='#95a5a6'; s.disabled=true;
+  try{await getJSON('/api/fuente',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fuente:nueva})});window.location.reload();}
+  catch(e){alert('⚠️ No se pudo cambiar la fuente:\n'+e.message);s.disabled=false;cargarFuente();}
 }
 
-// ============================================================
-// PANEL — RUTA ÓPTIMA
-// ============================================================
-
-function actualizarPanel(data) {
-    const panel = document.getElementById('panelRuta');
-    const nombresCriterio = {
-        distancia: 'Distancia mínima'
-    };
-    const nombreCriterio = nombresCriterio[data.criterio] || data.criterio || 'Criterio seleccionado';
-
-    const badgeMetricas = `<span class="badge bg-success ms-1" title="Pesos del grafo medidos por OSRM sobre OpenStreetMap">
-        <i class="fas fa-check-circle me-1"></i>Métricas: OSRM
-    </span>`;
-
-    const tCond = Number(data.tiempo_conduccion_min || data.tiempo_min || 0);
-    const tTotal = Number(data.tiempo_min || tCond);
-    const holgura = tTotal - tCond;
-    let desgloseTiempo = "";
-    if (holgura > 0.1) {
-        desgloseTiempo = `<div class="small text-muted mt-1">
-            <i class="fas fa-info-circle me-1"></i>
-            ${tCond.toFixed(0)} min conducción + ${holgura.toFixed(0)} min holgura (×${CONFIG.factorHolgura})
-        </div>`;
-    }
-
-    let html = `
-        <h6 class="fw-bold text-success mb-3">
-            <i class="fas fa-route me-2"></i>
-            Ruta óptima <span class="badge bg-success ms-2">Dijkstra</span>
-        </h6>
-
-        <div class="mb-2">${badgeMetricas}</div>
-
-        <div class="alert alert-light border mb-2">
-            <strong>Criterio:</strong> ${nombreCriterio}
-        </div>
-
-        <div class="mb-3">
-            <div class="d-flex justify-content-between">
-                <span><i class="fas fa-road text-success"></i> ${Number(data.distancia_km).toFixed(2)} km</span>
-                <span><i class="fas fa-clock text-primary"></i> ${Number(data.tiempo_min).toFixed(0)} min</span>
-                <span><i class="fas fa-dollar-sign text-warning"></i> $${Number(data.costo).toFixed(2)}</span>
-            </div>
-            ${desgloseTiempo}
-        </div>
-
-        <div class="border-top pt-3">
-            <p class="mb-1"><strong>Origen:</strong> ${data.nodos_ruta?.[0]?.nombre || 'No disponible'}</p>
-            <p class="mb-1"><strong>Destino:</strong> ${data.nodos_ruta?.[data.nodos_ruta.length - 1]?.nombre || 'No disponible'}</p>
-        </div>
-        <hr>
-        <h6 class="fw-bold">Camino óptimo (Dijkstra)</h6>
-    `;
-
-    if (Array.isArray(data.nodos_ruta)) {
-        data.nodos_ruta.forEach((nodo, indice) => {
-            html += `
-                <div class="paso">
-                    <span class="indice">${indice + 1}</span>
-                    <div>
-                        <strong>${nodo.nombre}</strong>${etiquetaDePaso(nodo)}<br>
-                        <small class="text-muted">Nodo: ${nodo.cod}</small>
-                    </div>
-                </div>
-            `;
-        });
-    }
-
-    if (Array.isArray(data.segmentos) && data.segmentos.length > 1) {
-        html += `<hr><h6 class="fw-bold">Detalle de los tramos</h6>`;
-        data.segmentos.forEach((tramo, indice) => {
-            const origen = data.nodos_ruta?.find(n => Number(n.id) === Number(tramo.origen));
-            const destino = data.nodos_ruta?.find(n => Number(n.id) === Number(tramo.destino));
-            html += `
-                <div class="border rounded p-2 mb-2">
-                    <small><strong>${indice + 1}.</strong> ${origen?.nombre || 'Origen'} → ${destino?.nombre || 'Destino'}</small><br>
-                    <small class="text-muted">${Number(tramo.distancia_km).toFixed(2)} km · ${Number(tramo.tiempo_min).toFixed(1)} min · $${Number(tramo.costo).toFixed(2)}</small>
-                </div>
-            `;
-        });
-    }
-    panel.innerHTML = html;
-}
-
-// ============================================================
-// GEOJSON
-// ============================================================
-
-function cargarGeoJSON() { document.getElementById('fileInput').click(); }
-
-function procesarGeoJSON(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const geojson = JSON.parse(e.target.result);
-            if (geojson.type === 'Feature' && geojson.geometry.type === 'LineString') {
-                const coords = geojson.geometry.coordinates;
-                const puntos_ruta = coords.map(c => [c[1], c[0]]);
-                if (rutaLayer) { mapa.removeLayer(rutaLayer); rutaLayer = null; }
-                if (rutaGeoJSONLayer) { mapa.removeLayer(rutaGeoJSONLayer); rutaGeoJSONLayer = null; }
-                marcadoresRuta.forEach(m => mapa.removeLayer(m));
-                marcadoresRuta = [];
-
-                rutaGeoJSONLayer = L.polyline(puntos_ruta, {
-                    color: '#E74C3C', weight: 5, opacity: 0.9,
-                    dashArray: '10, 10', lineJoin: 'round'
-                }).addTo(mapa);
-                const bounds = rutaGeoJSONLayer.getBounds();
-                if (bounds.isValid()) mapa.fitBounds(bounds, { padding: [50, 50] });
-
-                let distanciaTotal = 0;
-                for (let i = 0; i < puntos_ruta.length - 1; i++) {
-                    distanciaTotal += calcularDistanciaHaversine(
-                        puntos_ruta[i][0], puntos_ruta[i][1],
-                        puntos_ruta[i+1][0], puntos_ruta[i+1][1]
-                    );
-                }
-                const tCond = distanciaTotal / 40 * 60;
-                const tTotal = tCond * CONFIG.factorHolgura;
-                document.getElementById('totalDistancia').textContent = `${distanciaTotal.toFixed(2)} km`;
-                document.getElementById('totalTiempo').textContent = `${Math.round(tTotal)} min`;
-                document.getElementById('totalCosto').textContent = `$${(distanciaTotal * 0.15).toFixed(2)}`;
-                document.getElementById('totalParadas').textContent = `GeoJSON`;
-
-                document.getElementById('panelRuta').innerHTML = `
-                    <h6 class="fw-bold text-danger mb-3"><i class="fas fa-file-alt me-2"></i>Ruta GeoJSON Cargada</h6>
-                    <div class="alert alert-warning">
-                        <i class="fas fa-info-circle me-1"></i> Esta ruta fue cargada desde un archivo GeoJSON
-                    </div>
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between">
-                            <span><i class="fas fa-road text-success"></i> ${distanciaTotal.toFixed(2)} km</span>
-                            <span><i class="fas fa-clock text-primary"></i> ${Math.round(tTotal)} min</span>
-                            <span><i class="fas fa-dollar-sign text-warning"></i> $${(distanciaTotal * 0.15).toFixed(2)}</span>
-                        </div>
-                    </div>
-                    <p><strong>Puntos:</strong> ${puntos_ruta.length}</p>
-                    <p><strong>Archivo:</strong> ${file.name}</p>
-                    <button class="btn btn-danger btn-sm w-100 mt-2" onclick="limpiarRutaGeoJSON()">
-                        <i class="fas fa-trash me-1"></i> Eliminar ruta
-                    </button>
-                `;
-            } else {
-                alert('El archivo debe ser un Feature de tipo LineString');
-            }
-        } catch (error) {
-            alert('Error al procesar el archivo GeoJSON: ' + error.message);
-        }
-    };
-    reader.readAsText(file);
-}
-
-function limpiarRutaGeoJSON() {
-    if (rutaGeoJSONLayer) { mapa.removeLayer(rutaGeoJSONLayer); rutaGeoJSONLayer = null; }
-    document.getElementById('totalDistancia').textContent = '--';
-    document.getElementById('totalTiempo').textContent = '--';
-    document.getElementById('totalCosto').textContent = '--';
-    document.getElementById('totalParadas').textContent = '--';
-    document.getElementById('panelRuta').innerHTML = `
-        <div class="text-center text-muted py-5">
-            <i class="fas fa-road fa-3x mb-3 d-block" style="color:#dce0e5;"></i>
-            <p>Ruta GeoJSON eliminada</p>
-            <small>Selecciona origen y destino para calcular una nueva ruta</small>
-        </div>
-    `;
-}
-
-// ============================================================
-// RAPAS (VOZ)
-// ============================================================
-
-let harpiaHablando = false;
-let vozActual = null;
-
-// Voz de hombre para Rapas. El navegador no indica el género de las voces,
-// así que se elige por nombre; si no hay ninguna masculina en español,
-// se usa una voz en español con el tono más grave.
-const VOZ_MASCULINA = /jorge|diego|juan|carlos|pablo|raul|raúl|enrique|miguel|alvaro|álvaro|alonso|tomas|tomás|andres|andrés|antonio|jaime|luis|\bmale\b|hombre|masculin/i;
-const VOZ_FEMENINA = /monica|mónica|paulina|helena|laura|sabina|esperanza|angelica|angélica|marisol|dalia|elvira|elena|female|mujer|femenin|zira|google español/i;
-const REGIONES_PREFERIDAS = ['es-pa', 'es-mx', 'es-us', 'es-co', 'es-419', 'es-ar', 'es-es'];
-
-function configurarVozRapas(utterance) {
-    utterance.lang = 'es-PA';
-    utterance.rate = 0.95;
-    const voces = window.speechSynthesis.getVoices()
-        .filter(v => v.lang && v.lang.toLowerCase().replace('_', '-').startsWith('es'));
-    const orden = v => {
-        const i = REGIONES_PREFERIDAS.indexOf(v.lang.toLowerCase().replace('_', '-'));
-        return i === -1 ? 99 : i;
-    };
-    const masculinas = voces
-        .filter(v => VOZ_MASCULINA.test(v.name) && !VOZ_FEMENINA.test(v.name))
-        .sort((a, b) => orden(a) - orden(b));
-    if (masculinas.length) {
-        utterance.voice = masculinas[0];
-        utterance.lang = masculinas[0].lang;
-        utterance.pitch = 0.9;
-    } else {
-        if (voces.length) {
-            utterance.voice = voces[0];
-            utterance.lang = voces[0].lang;
-        }
-        utterance.pitch = 0.6;
-    }
-}
-
-// automatico = true: Rapas narra la ruta recién calculada (sin saludo y sin
-// alertas); si ya estaba hablando, se interrumpe y cuenta la nueva ruta.
-function hablarHarpia(evento, automatico) {
-    if (!window.speechSynthesis) {
-        if (!automatico) alert('Tu navegador no soporta síntesis de voz.');
-        return;
-    }
-
-    const btn = document.getElementById('btnHarpia');
-    const harpia = document.getElementById('harpia');
-    const texto = document.getElementById('harpiaTexto');
-
-    if (harpiaHablando) {
-        window.speechSynthesis.cancel();
-        harpiaHablando = false;
-        btn.classList.remove('escuchando');
-        harpia.classList.remove('hablando');
-        texto.textContent = 'Hablar con Rapas';
-        if (!automatico) return;
-    }
-
-    if (automatico) window.speechSynthesis.cancel();
-    saludoDado = true;
-    let mensaje = '';
-
-    if (rutaGeoJSONLayer) {
-        const distancia = document.getElementById('totalDistancia').textContent;
-        const tiempo = document.getElementById('totalTiempo').textContent;
-        mensaje =
-            `¡Hola! Soy Rapas. ` +
-            `Tienes cargada una ruta desde un archivo GeoJSON. ` +
-            `La distancia total es de ${distancia} y el tiempo estimado es de ${tiempo}. ` +
-            `¡Disfruta tu recorrido por la provincia de Coclé!`;
-    } else if (ultimaRuta) {
-        const origen = ultimaRuta.nodos_ruta?.[0]?.nombre || 'el punto de origen';
-        const destino = ultimaRuta.nodos_ruta?.[ultimaRuta.nodos_ruta.length - 1]?.nombre || 'el punto de destino';
-        const distancia = Number(ultimaRuta.distancia_km).toFixed(2);
-        const tiempo = Math.round(ultimaRuta.tiempo_min);
-        const costo = Number(ultimaRuta.costo).toFixed(2);
-
-        const nombresCriterio = {
-            distancia: 'distancia mínima'
-        };
-        const criterio = nombresCriterio[ultimaRuta.criterio] || ultimaRuta.criterio || 'criterio seleccionado';
-
-        mensaje =
-            (automatico ? '' : `¡Hola! Soy Rapas, y te acompañaré en este recorrido. `) +
-            `Usando el algoritmo de Dijkstra, se calculó la ruta óptima según el criterio de ${criterio}. ` +
-            `El recorrido inicia en ${origen} y termina en ${destino}, pasando por ${ultimaRuta.nodos_ruta.length} atractivos. ` +
-            `La distancia total es de ${distancia} kilómetros, el tiempo estimado es de ${tiempo} minutos ` +
-            `y el costo aproximado es de ${costo} dólares. ` +
-            `¡Disfruta tu recorrido por la provincia de Coclé!`;
-    } else {
-        mensaje =
-            `¡Hola! Soy Rapas. ` +
-            `Aún no has calculado ninguna ruta. ` +
-            `Selecciona un origen y un destino, y presiona el botón de calcular ruta óptima con Dijkstra. ` +
-            `Después podrás hacerme clic de nuevo y te contaré todos los detalles de tu recorrido por Coclé.`;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(mensaje);
-    configurarVozRapas(utterance);
-    vozActual = utterance;
-
-    utterance.onstart = () => {
-        harpiaHablando = true;
-        btn.classList.add('escuchando');
-        harpia.classList.add('hablando');
-        texto.textContent = 'Detener a Rapas';
-    };
-
-    utterance.onend = () => {
-        if (vozActual !== utterance) return;
-        harpiaHablando = false;
-        btn.classList.remove('escuchando');
-        harpia.classList.remove('hablando');
-        texto.textContent = 'Hablar con Rapas';
-    };
-
-    utterance.onerror = () => {
-        if (vozActual !== utterance) return;
-        harpiaHablando = false;
-        btn.classList.remove('escuchando');
-        harpia.classList.remove('hablando');
-        texto.textContent = 'Hablar con Rapas';
-    };
-
-    window.speechSynthesis.speak(utterance);
-}
-
-// Saludo automático al abrir la página.
-// Si el navegador bloquea el audio sin interacción previa, Rapas saluda
-// en cuanto el usuario hace el primer clic, toque o pulsación de tecla.
-let saludoDado = false;
-let esperandoSaludo = false;
-
-function saludoInicial() {
-    if (!window.speechSynthesis || saludoDado || harpiaHablando) return;
-    saludoDado = true;
-
-    const btn = document.getElementById('btnHarpia');
-    const harpia = document.getElementById('harpia');
-    const texto = document.getElementById('harpiaTexto');
-    let empezo = false;
-
-    const utterance = new SpeechSynthesisUtterance(
-        '¡Hola! Soy Rapas, te doy la bienvenida a las rutas turísticas de Coclé. ' +
-        'Selecciona un origen y un destino, y presiona calcular ruta óptima con Dijkstra.'
-    );
-    configurarVozRapas(utterance);
-    vozActual = utterance;
-
-    const reiniciar = () => {
-        if (vozActual !== utterance) return;
-        harpiaHablando = false;
-        btn.classList.remove('escuchando');
-        harpia.classList.remove('hablando');
-        texto.textContent = 'Hablar con Rapas';
-    };
-
-    utterance.onstart = () => {
-        empezo = true;
-        harpiaHablando = true;
-        btn.classList.add('escuchando');
-        harpia.classList.add('hablando');
-        texto.textContent = 'Detener a Rapas';
-    };
-    utterance.onend = reiniciar;
-    utterance.onerror = (e) => {
-        reiniciar();
-        if (e && e.error === 'not-allowed') {
-            saludoDado = false;
-            esperarInteraccionParaSaludar();
-        }
-    };
-
-    window.speechSynthesis.speak(utterance);
-
-    // Si el navegador no empieza a hablar, esperar la primera interacción
-    setTimeout(() => {
-        if (!empezo && saludoDado && vozActual === utterance) {
-            window.speechSynthesis.cancel();
-            saludoDado = false;
-            esperarInteraccionParaSaludar();
-        }
-    }, 1500);
-}
-
-function esperarInteraccionParaSaludar() {
-    if (esperandoSaludo) return;
-    esperandoSaludo = true;
-    const eventos = ['click', 'touchstart', 'keydown'];
-    const intentar = () => {
-        eventos.forEach(ev => document.removeEventListener(ev, intentar));
-        esperandoSaludo = false;
-        saludoInicial();
-    };
-    eventos.forEach(ev => document.addEventListener(ev, intentar));
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    const harpia = document.getElementById('harpia');
-    if (harpia) harpia.addEventListener('click', hablarHarpia);
-
-    // Esperar un momento a que el navegador cargue las voces antes de saludar
-    if (window.speechSynthesis) {
-        if (window.speechSynthesis.getVoices().length) {
-            saludoInicial();
-        } else {
-            let lanzado = false;
-            const lanzar = () => { if (!lanzado) { lanzado = true; saludoInicial(); } };
-            if (typeof window.speechSynthesis.addEventListener === 'function') {
-                window.speechSynthesis.addEventListener('voiceschanged', lanzar, { once: true });
-            }
-            setTimeout(lanzar, 700);
-        }
-    }
-});
-
-// ============================================================
-// DÍAS
-// ============================================================
-
-async function cargarDias() {
-    try {
-        const respuesta = await fetch('/api/dias');
-        const ct = respuesta.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) {
-            console.error('Respuesta no-JSON al cargar días');
-            return;
-        }
-        const dias = await respuesta.json();
-        DIAS_CACHE = dias;
-        const container = document.getElementById('diasContainer');
-        container.innerHTML = '';
-        dias.forEach(dia => {
-            const destinosStr = dia.destinos.map(id => ATRACTIVOS[id].cod).join(' → ');
-            container.innerHTML += `
-                <div class="col-md-3 col-6">
-                    <div class="card card-dia shadow-sm" onclick="cargarDia(${dia.dia})">
-                        <div class="card-body text-center p-3">
-                            <span class="badge bg-success rounded-pill mb-2">Día ${dia.dia}</span>
-                            <h6 class="card-title mb-1" style="font-size:0.9rem;">${dia.zona}</h6>
-                            <small class="text-muted" style="font-size:0.7rem;">${destinosStr}</small>
-                            <div class="mt-2"><span class="badge bg-light text-dark">${dia.destinos.length} lugares</span></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-    } catch (error) {
-        console.error('Error cargando días:', error);
-    }
-}
-
-async function cargarDia(diaNum) {
-    document.getElementById('panelRuta').innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border text-success" role="status"></div>
-            <p class="mt-3 mb-1">Calculando itinerario óptimo del día ${diaNum}...</p>
-            <small class="text-muted">Resolviendo orden de visita con Dijkstra</small>
-        </div>
-    `;
-
-    try {
-        const respuesta = await fetch(`/api/dia/${diaNum}?criterio=${criterioActual}`);
-        const ct = respuesta.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) {
-            const texto = await respuesta.text();
-            console.error('Respuesta no-JSON:', texto.substring(0, 500));
-            throw new Error(`El servidor respondió con status ${respuesta.status}.`);
-        }
-        const data = await respuesta.json();
-        if (!respuesta.ok || !data.exito) throw new Error(data.error || 'No se pudo calcular el día');
-        ultimaRuta = data;
-        if (rutaGeoJSONLayer) { mapa.removeLayer(rutaGeoJSONLayer); rutaGeoJSONLayer = null; }
-        await dibujarRuta(data);
-        actualizarEstadisticas(data);
-        actualizarPanelDia(data);
-        try { hablarHarpia(null, true); } catch (e) { console.warn('Rapas no pudo hablar:', e); }
-    } catch (error) {
-        console.error('Error calculando itinerario:', error);
-        document.getElementById('panelRuta').innerHTML = `
-            <div class="alert alert-danger"><strong>Error:</strong> ${error.message}</div>
-        `;
-    }
-}
-
-function actualizarPanelDia(data) {
-    const panel = document.getElementById('panelRuta');
-    const tCond = Number(data.tiempo_conduccion_min || 0);
-    const tTotal = Number(data.tiempo_min || 0);
-    const holgura = tTotal - tCond;
-
-    let html = `
-        <h6 class="fw-bold text-success mb-3">
-            <i class="fas fa-calendar-day me-2"></i>
-            Día ${data.dia}
-            <span class="badge bg-success ms-2">Orden óptimo (Dijkstra)</span>
-        </h6>
-        <div class="alert alert-light border mb-2">
-            <strong>Zona:</strong> ${data.zona}<br>
-            <strong>Criterio:</strong> ${data.criterio}
-        </div>
-        <div class="mb-3">
-            <div class="d-flex justify-content-between">
-                <span><i class="fas fa-road text-success"></i> ${Number(data.distancia_km).toFixed(2)} km</span>
-                <span><i class="fas fa-clock text-primary"></i> ${Number(data.tiempo_min).toFixed(0)} min</span>
-                <span><i class="fas fa-dollar-sign text-warning"></i> $${Number(data.costo).toFixed(2)}</span>
-            </div>
-            ${holgura > 0.1 ? `<div class="small text-muted mt-1">
-                <i class="fas fa-info-circle me-1"></i>
-                ${tCond.toFixed(0)} min conducción + ${holgura.toFixed(0)} min holgura (×${CONFIG.factorHolgura})
-            </div>` : ''}
-        </div>
-        <hr>
-        <h6 class="fw-bold">Orden óptimo de visita</h6>
-    `;
-    if (Array.isArray(data.nodos_ruta)) {
-        data.nodos_ruta.forEach((nodo, indice) => {
-            html += `
-                <div class="paso">
-                    <span class="indice">${indice + 1}</span>
-                    <div>
-                        <strong>${nodo.nombre}</strong>${etiquetaDePaso(nodo)}<br>
-                        <small class="text-muted">Nodo: ${nodo.cod}</small>
-                    </div>
-                </div>
-            `;
-        });
-    }
-    panel.innerHTML = html;
-}
-
-// ============================================================
-// FUENTE DE COORDENADAS
-// ============================================================
-
-async function cargarFuenteCoordenadas() {
-    try {
-        const respuesta = await fetch('/api/fuente');
-        const ct = respuesta.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) {
-            console.warn('Respuesta no-JSON al cargar fuente');
-            return;
-        }
-        const data = await respuesta.json();
-        const badge = document.getElementById('badgeFuente');
-        const select = document.getElementById('fuenteSelect');
-        if (!badge || !select) return;
-        select.value = data.fuente;
-        badge.style.background = data.es_oficial ? '#27AE60' :
-                                 (data.fuente === 'osm' ? '#E67E22' : '#2E86C1');
-        badge.title = `Fuente activa: ${data.fuente_nombre}` +
-                      (data.es_oficial ? ' (oficial del proyecto)' :
-                       ' (modo de análisis de sensibilidad, no oficial)') +
-                      ` · ${data.total_atractivos} atractivos`;
-
-        const aviso = document.getElementById('avisoHolgura');
-        if (aviso && data.factor_holgura && data.factor_holgura !== 1.0) {
-            aviso.innerHTML = `<br><i class="fas fa-stopwatch me-1"></i>
-                El tiempo mostrado incluye un factor de holgura ×${data.factor_holgura}
-                (+${Math.round((data.factor_holgura - 1) * 100)}%) sobre el tiempo de conducción puro.`;
-        }
-    } catch (error) {
-        console.warn('No se pudo obtener la fuente:', error);
-    }
-}
-
-async function cambiarFuente(nuevaFuente) {
-    const badge = document.getElementById('badgeFuente');
-    const select = document.getElementById('fuenteSelect');
-
-    if (nuevaFuente !== CONFIG.fuenteOficial) {
-        const confirmar = confirm(
-            `⚠️ Estás cambiando a ${nuevaFuente === 'osm' ? 'OpenStreetMap' : 'Google Maps'}.\n\n` +
-            `La fuente OFICIAL del proyecto es ${CONFIG.fuenteOficial.toUpperCase()}.\n` +
-            `Este cambio se usa solo para análisis de sensibilidad y los resultados ` +
-            `pueden variar ligeramente.\n\n` +
-            `El servidor reconstruirá el grafo con las coordenadas de la nueva fuente.\n\n` +
-            `¿Deseas continuar?`
-        );
-        if (!confirmar) {
-            select.value = CONFIG.fuenteActual;
-            return;
-        }
-    }
-
-    if (badge) badge.style.background = '#95a5a6';
-    if (select) select.disabled = true;
-
-    try {
-        const respuesta = await fetch('/api/fuente', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fuente: nuevaFuente })
-        });
-        const ct = respuesta.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) {
-            throw new Error('Respuesta no-JSON del servidor');
-        }
-        const data = await respuesta.json();
-        if (!respuesta.ok || !data.exito) throw new Error(data.error || 'No se pudo cambiar la fuente');
-        window.location.reload();
-    } catch (error) {
-        console.error('Error cambiando fuente:', error);
-        alert('⚠️ No se pudo cambiar la fuente de coordenadas:\n' + error.message);
-        if (select) { select.disabled = false; cargarFuenteCoordenadas(); }
-    }
-}
-
-// ============================================================
-// INICIO
-// ============================================================
-
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('================================');
-    console.log('Plataforma de rutas de Coclé');
-    console.log('Método: Grafo de atractivos + Dijkstra');
-    console.log('Criterio oficial:', CONFIG.criterioOficial);
-    console.log('Fuente oficial:', CONFIG.fuenteOficial);
-    console.log('Atractivos:', Object.keys(ATRACTIVOS).length);
-    console.log('================================');
-
-    llenarSelectores();
-    initMapa();
-    cargarDias();
-    cargarFuenteCoordenadas();
-
-    if (window.speechSynthesis) {
-        window.speechSynthesis.getVoices();
-        window.speechSynthesis.onvoiceschanged = () => {
-            window.speechSynthesis.getVoices();
-        };
-    }
+// ============ INICIO ============
+document.addEventListener('DOMContentLoaded',function(){
+  llenarSelectores(); initMapa(); cargarDias(); cargarFuente(); cargarSitios(); cargarCombustible();
+  document.getElementById('tab-rutas').addEventListener('shown.bs.tab',()=>setTimeout(()=>mapa.invalidateSize(),50));
+  document.getElementById('harpia').addEventListener('click',hablarHarpia);
+  if(window.speechSynthesis){
+    const lanzar=(()=>{let l=false;return()=>{if(!l){l=true;saludoInicial();}};})();
+    if(window.speechSynthesis.getVoices().length) lanzar();
+    else{ if(typeof window.speechSynthesis.addEventListener==='function') window.speechSynthesis.addEventListener('voiceschanged',lanzar,{once:true}); setTimeout(lanzar,700); }
+  }
 });
 </script>
-
 </body>
 </html>
