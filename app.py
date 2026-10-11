@@ -722,8 +722,11 @@ def api_dia(dia_num):
     """
     Itinerario óptimo de un día:
     1) Dijkstra desde cada parada + TSP exacto deciden el orden de visita.
-    2) Cada tramo entre paradas es un camino mínimo de Dijkstra sobre el grafo.
-    3) Las métricas son la suma de las aristas del recorrido completo.
+    2) Cada etapa entre paradas consecutivas es un camino mínimo de Dijkstra.
+    3) Se muestran SOLO las paradas del itinerario, en su orden óptimo. Si una
+       etapa pasa físicamente por otro atractivo, no se lista como parada: se
+       informa en "pasa_por" de esa etapa y su distancia sí cuenta en el total.
+    4) Las métricas son la suma de las aristas del recorrido completo.
     """
     try:
         dia = next((d for d in DIAS if d["dia"] == dia_num), None)
@@ -742,20 +745,30 @@ def api_dia(dia_num):
             return jsonify({"exito": False, "error": "No se pudo calcular el orden óptimo."}), 500
         secuencia = [BASE] + orden + [BASE]
 
-        # 2) Camino mínimo (Dijkstra) entre paradas consecutivas
+        # 2) Camino mínimo (Dijkstra) entre paradas consecutivas (etapas)
         camino = [BASE]
+        etapas = []
         for a, b in zip(secuencia, secuencia[1:]):
             _, prev = dijkstra(grafo, a, criterio, b)
             tramo = reconstruir_camino(prev, a, b)
             if tramo is None:
                 return jsonify({"exito": False, "error": "No existe camino entre paradas."}), 500
             camino.extend(tramo[1:])
+            d_et, t_et, c_et, _ = metricas_camino(grafo, tramo)
+            etapas.append({
+                "origen": a, "destino": b,
+                "distancia_km": round(d_et, 2),
+                "tiempo_min": round(t_et, 2),
+                "costo": round(c_et, 2),
+                "pasa_por": tramo[1:-1],
+            })
 
-        # 3) Métricas y geometría
-        dist_total, t_conduccion, costo_total, segmentos = metricas_camino(grafo, camino)
+        # 3) Métricas totales y geometría (siguen el camino completo de Dijkstra)
+        dist_total, t_conduccion, costo_total, _ = metricas_camino(grafo, camino)
         t_total = t_conduccion * FACTOR_HOLGURA
         puntos_ruta = geometria_camino(atractivos, camino)
-        nodos_ruta = construir_nodos_ruta(atractivos, camino, set(secuencia))
+        # Solo se listan las paradas del itinerario, en el orden óptimo
+        nodos_ruta = construir_nodos_ruta(atractivos, secuencia, set(secuencia))
 
         return jsonify({
             "exito": True,
@@ -763,10 +776,11 @@ def api_dia(dia_num):
             "zona": dia["zona"],
             "criterio": criterio,
             "orden_optimo": secuencia,
-            "camino": camino,
+            "camino": secuencia,
+            "camino_completo": camino,
             "nodos_ruta": nodos_ruta,
             "puntos_ruta": puntos_ruta,
-            "segmentos": segmentos,
+            "segmentos": etapas,
             "distancia_km": round(dist_total, 2),
             "tiempo_conduccion_min": round(t_conduccion, 2),
             "tiempo_min": round(t_total, 2),
