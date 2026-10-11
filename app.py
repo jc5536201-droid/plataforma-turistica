@@ -74,6 +74,12 @@ FACTOR_DESVIO = float(os.environ.get("FACTOR_DESVIO", "1.3"))
 # variable de entorno CONECTAR_HUBS=0 para desactivarlo (análisis de sensibilidad).
 CONECTAR_HUBS = os.environ.get("CONECTAR_HUBS", "1") != "0"
 
+# En la ruta entre dos puntos: False = se muestran solo origen y destino
+# (los nodos intermedios por los que pasa Dijkstra se informan en "pasa_por");
+# True = se muestra el camino completo con los nodos "de paso".
+# Variable de entorno: MOSTRAR_NODOS_DE_PASO=1
+MOSTRAR_NODOS_DE_PASO = os.environ.get("MOSTRAR_NODOS_DE_PASO", "0") == "1"
+
 # Nodo base de los itinerarios diarios (Penonomé)
 BASE = 15
 
@@ -692,14 +698,28 @@ def api_ruta():
         dist_total, t_conduccion, costo_total, segmentos = metricas_camino(grafo, camino)
         t_total = t_conduccion * FACTOR_HOLGURA
         puntos_ruta = geometria_camino(atractivos, camino)
-        nodos_ruta = construir_nodos_ruta(atractivos, camino, {origen, destino})
+
+        if MOSTRAR_NODOS_DE_PASO:
+            camino_mostrado = camino
+        else:
+            # Solo origen y destino; el cálculo y las métricas usan el camino completo
+            camino_mostrado = [origen, destino]
+            segmentos = [{
+                "origen": origen, "destino": destino,
+                "distancia_km": round(dist_total, 2),
+                "tiempo_min": round(t_conduccion, 2),
+                "costo": round(costo_total, 2),
+            }]
+        nodos_ruta = construir_nodos_ruta(atractivos, camino_mostrado, {origen, destino})
 
         return jsonify({
             "exito": True,
             "origen": origen,
             "destino": destino,
             "criterio": criterio,
-            "camino": camino,
+            "camino": camino_mostrado,
+            "camino_completo": camino,
+            "pasa_por": camino[1:-1],
             "nodos_ruta": nodos_ruta,
             "distancia_km": round(dist_total, 2),
             "tiempo_conduccion_min": round(t_conduccion, 2),
@@ -709,7 +729,7 @@ def api_ruta():
             "fuente_metricas": grafo["fuente_pesos"],
             "puntos_ruta": puntos_ruta,
             "segmentos": segmentos,
-            "nodos_visitados": len(camino),
+            "nodos_visitados": len(camino_mostrado),
             "metodo": "dijkstra_grafo"
         })
     except Exception as e:
