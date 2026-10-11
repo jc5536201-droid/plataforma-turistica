@@ -6,8 +6,14 @@ Servidor Flask con OSRM + algoritmo de Dijkstra.
 ARQUITECTURA (grafo + Dijkstra real)
 ═══════════════════════════════════════════════════════════════════════════════
 • Grafo G = (V, E): V = los 29 atractivos turísticos.
-  Cada atractivo se conecta con sus K vecinos más cercanos (Haversine) y se
-  añade un árbol de expansión mínima (Prim) para garantizar que G sea conexo.
+  Aristas (no dirigidas):
+    1) Cada atractivo se conecta con sus K vecinos más cercanos (Haversine).
+    2) Se añade un árbol de expansión mínima (Prim) para garantizar que G sea
+       conexo.
+    3) Reparación de desvíos (spanner voraz): se añade la arista directa a-b
+       cuando el camino mínimo que ya existe entre a y b es más largo que
+       FACTOR_DESVIO × la distancia directa por carretera. Así ningún camino
+       del grafo supera ese desvío máximo (por defecto 1.3 = +30 %).
 • Pesos de las aristas: distancia, tiempo y costo REALES por carretera,
   obtenidos de OSRM con una sola consulta (/table) por fuente de coordenadas.
 • Camino mínimo entre dos atractivos: algoritmo de Dijkstra (cola de prioridad
@@ -56,6 +62,11 @@ FUENTE_OFICIAL = "google"
 
 # Grafo: cada atractivo se conecta con sus K vecinos más cercanos
 K_VECINOS = 4
+
+# Máximo desvío permitido: ningún camino del grafo puede ser más largo que
+# FACTOR_DESVIO × la distancia directa por carretera entre sus extremos.
+FACTOR_DESVIO = float(os.environ.get("FACTOR_DESVIO", "1.3"))
+
 # Nodo base de los itinerarios diarios (Penonomé)
 BASE = 15
 
@@ -372,8 +383,13 @@ def construir_grafo(atractivos):
     """
     Construye el grafo G = (V, E) de los atractivos.
 
-    Aristas (no dirigidas): K vecinos más cercanos de cada nodo (Haversine)
-    unión un árbol de expansión mínima (Prim), lo que garantiza que G sea conexo.
+    Aristas (no dirigidas):
+      1) K vecinos más cercanos de cada nodo (Haversine).
+      2) Árbol de expansión mínima (Prim) → G conexo.
+      3) Reparación de desvíos (spanner voraz): se añade la arista directa a-b
+         si el camino mínimo actual entre a y b supera FACTOR_DESVIO × la
+         distancia directa por carretera. Así ninguna ruta tiene un desvío
+         absurdo (p. ej. Natá → Penonomé pasando por zonas intermedias lejanas).
     Pesos (dirigidos, a→b): distancia, tiempo y costo reales por carretera (OSRM).
     """
     ids = sorted(atractivos)
@@ -408,7 +424,7 @@ def construir_grafo(atractivos):
     indice = {n: i for i, n in enumerate(ids)}
     usados_fallback = 0
 
-    def pesos(a, b):
+    def pesos(a, b, contar=True):
         nonlocal usados_fallback
         if osrm is not None:
             _, mat_d, mat_t = osrm
@@ -419,7 +435,8 @@ def construir_grafo(atractivos):
                 return {"distancia_km": dist_km,
                         "tiempo_min": t / 60.0,
                         "costo": dist_km * COSTO_POR_KM}
-        usados_fallback += 1
+        if contar:
+            usados_fallback += 1
         dist_km, tmin, costo = peso_arista_fallback(
             atractivos[a]["lat"], atractivos[a]["lng"],
             atractivos[b]["lat"], atractivos[b]["lng"])
@@ -429,6 +446,28 @@ def construir_grafo(atractivos):
     for a, b in pares:
         ady[a][b] = pesos(a, b)
         ady[b][a] = pesos(b, a)
+    aristas_base = len(pares)
+
+    # 4) Reparación de desvíos: se revisan los pares sin arista, del más
+    #    cercano al más lejano (distancia directa por carretera).
+    grafo_tmp = {"ady": ady}
+    candidatos = sorted(
+        (pesos(a, b, contar=False)["distancia_km"], a, b)
+        for a in ids for b in ids
+        if a < b and (a, b) not in pares
+    )
+    reparadas = []
+    for _, a, b in candidatos:
+        directo_ab = pesos(a, b, contar=False)["distancia_km"]
+        directo_ba = pesos(b, a, contar=False)["distancia_km"]
+        camino_ab = dijkstra(grafo_tmp, a, "distancia", b)[0][b]
+        camino_ba = dijkstra(grafo_tmp, b, "distancia", a)[0][a]
+        if (camino_ab > FACTOR_DESVIO * directo_ab
+                or camino_ba > FACTOR_DESVIO * directo_ba):
+            pares.add((a, b))
+            ady[a][b] = pesos(a, b)
+            ady[b][a] = pesos(b, a)
+            reparadas.append((a, b))
 
     if osrm is None:
         fuente_pesos = "haversine"
@@ -442,6 +481,9 @@ def construir_grafo(atractivos):
         "atractivos": atractivos,
         "ady": ady,
         "num_aristas": len(pares),
+        "aristas_base": aristas_base,
+        "aristas_reparadas": len(reparadas),
+        "reparadas": reparadas,
         "fuente_pesos": fuente_pesos,
     }
 
@@ -716,6 +758,38 @@ def api_dia(dia_num):
         return jsonify({"exito": False, "error": str(e)}), 500
 
 
+@app.route("/api/grafo")
+def api_grafo():
+    """
+    Estadísticas del grafo (útil para la tesis): número de aristas del K-NN + MST,
+    aristas añadidas por la reparación de desvíos y lista de esas aristas.
+    """
+    try:
+        grafo = obtener_grafo()
+        atractivos = grafo["atractivos"]
+        return jsonify({
+            "exito": True,
+            "fuente": FUENTE_COORDENADAS,
+            "fuente_pesos": grafo["fuente_pesos"],
+            "nodos": len(grafo["ids"]),
+            "k_vecinos": K_VECINOS,
+            "factor_desvio": FACTOR_DESVIO,
+            "num_aristas": grafo["num_aristas"],
+            "aristas_base": grafo["aristas_base"],
+            "aristas_reparadas": grafo["aristas_reparadas"],
+            "lista_reparadas": [
+                {"a": a, "b": b,
+                 "nombre_a": atractivos[a]["nombre"],
+                 "nombre_b": atractivos[b]["nombre"],
+                 "distancia_km": round(grafo["ady"][a][b]["distancia_km"], 2)}
+                for a, b in grafo["reparadas"]
+            ],
+        })
+    except Exception as e:
+        print("ERROR API GRAFO:", e)
+        return jsonify({"exito": False, "error": str(e)}), 500
+
+
 @app.route("/api/coordenadas")
 def api_coordenadas():
     resultado = {}
@@ -745,6 +819,7 @@ def api_fuente_get():
         "criterio_oficial": CRITERIO_OFICIAL,
         "costo_por_km": COSTO_POR_KM,
         "k_vecinos": K_VECINOS,
+        "factor_desvio": FACTOR_DESVIO,
         "metodo": "dijkstra_grafo"
     })
 
@@ -781,6 +856,7 @@ if __name__ == "__main__":
     print(f"Fuente activa: {FUENTE_COORDENADAS.upper()}")
     print(f"Criterio oficial: {CRITERIO_OFICIAL.upper()}")
     print(f"Vecinos por nodo (K): {K_VECINOS}")
+    print(f"Desvío máximo permitido: {FACTOR_DESVIO} (+{round((FACTOR_DESVIO - 1) * 100)}%)")
     print(f"Factor de holgura: {FACTOR_HOLGURA} (+{round((FACTOR_HOLGURA - 1) * 100)}%)")
     print("\nServidor iniciado.")
     print("==========================================\n")
