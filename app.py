@@ -10,7 +10,10 @@ ARQUITECTURA (grafo + Dijkstra real)
     1) Cada atractivo se conecta con sus K vecinos más cercanos (Haversine).
     2) Se añade un árbol de expansión mínima (Prim) para garantizar que G sea
        conexo.
-    3) Reparación de desvíos (spanner voraz): se añade la arista directa a-b
+    3) Las ciudades-hub (Penonomé, Aguadulce, Antón, La Pintada, Natá) se
+       conectan todas entre sí: son las "estaciones" naturales entre zonas y
+       así ir de una ciudad a otra nunca obliga a un rodeo por atractivos.
+    4) Reparación de desvíos (spanner voraz): se añade la arista directa a-b
        cuando el camino mínimo que ya existe entre a y b es más largo que
        FACTOR_DESVIO × la distancia directa por carretera. Así ningún camino
        del grafo supera ese desvío máximo (por defecto 1.3 = +30 %).
@@ -66,6 +69,10 @@ K_VECINOS = 4
 # Máximo desvío permitido: ningún camino del grafo puede ser más largo que
 # FACTOR_DESVIO × la distancia directa por carretera entre sus extremos.
 FACTOR_DESVIO = float(os.environ.get("FACTOR_DESVIO", "1.3"))
+
+# Conectar entre sí todas las ciudades-hub (tipo "Hub/Ciudad"). Poner la
+# variable de entorno CONECTAR_HUBS=0 para desactivarlo (análisis de sensibilidad).
+CONECTAR_HUBS = os.environ.get("CONECTAR_HUBS", "1") != "0"
 
 # Nodo base de los itinerarios diarios (Penonomé)
 BASE = 15
@@ -386,7 +393,8 @@ def construir_grafo(atractivos):
     Aristas (no dirigidas):
       1) K vecinos más cercanos de cada nodo (Haversine).
       2) Árbol de expansión mínima (Prim) → G conexo.
-      3) Reparación de desvíos (spanner voraz): se añade la arista directa a-b
+      3) Todas las ciudades-hub conectadas entre sí (si CONECTAR_HUBS).
+      4) Reparación de desvíos (spanner voraz): se añade la arista directa a-b
          si el camino mínimo actual entre a y b supera FACTOR_DESVIO × la
          distancia directa por carretera. Así ninguna ruta tiene un desvío
          absurdo (p. ej. Natá → Penonomé pasando por zonas intermedias lejanas).
@@ -419,7 +427,17 @@ def construir_grafo(atractivos):
         en_arbol.add(mejor[2])
         pares.add((min(mejor[1], mejor[2]), max(mejor[1], mejor[2])))
 
-    # 3) Pesos reales de OSRM (una sola consulta)
+    aristas_kmst = len(pares)
+
+    # 3) Ciudades-hub conectadas entre sí
+    if CONECTAR_HUBS:
+        hubs = [n for n in ids if atractivos[n].get("tipo") == "Hub/Ciudad"]
+        for i, a in enumerate(hubs):
+            for b in hubs[i + 1:]:
+                pares.add((min(a, b), max(a, b)))
+    aristas_base = len(pares)
+
+    # 4) Pesos reales de OSRM (una sola consulta)
     osrm = obtener_matrices_osrm(atractivos)
     indice = {n: i for i, n in enumerate(ids)}
     usados_fallback = 0
@@ -446,9 +464,8 @@ def construir_grafo(atractivos):
     for a, b in pares:
         ady[a][b] = pesos(a, b)
         ady[b][a] = pesos(b, a)
-    aristas_base = len(pares)
 
-    # 4) Reparación de desvíos: se revisan los pares sin arista, del más
+    # 5) Reparación de desvíos: se revisan los pares sin arista, del más
     #    cercano al más lejano (distancia directa por carretera).
     grafo_tmp = {"ady": ady}
     candidatos = sorted(
@@ -481,6 +498,8 @@ def construir_grafo(atractivos):
         "atractivos": atractivos,
         "ady": ady,
         "num_aristas": len(pares),
+        "aristas_kmst": aristas_kmst,
+        "aristas_hubs": aristas_base - aristas_kmst,
         "aristas_base": aristas_base,
         "aristas_reparadas": len(reparadas),
         "reparadas": reparadas,
@@ -643,9 +662,13 @@ def api_ruta():
     Devuelve distancia, tiempo, costo, geometría, camino y tramos.
     """
     try:
-        data = request.get_json() or {}
-        origen = int(data["origen"])
-        destino = int(data["destino"])
+        data = request.get_json(silent=True) or {}
+        try:
+            origen = int(data["origen"])
+            destino = int(data["destino"])
+        except (KeyError, TypeError, ValueError):
+            return jsonify({"exito": False,
+                            "error": "Debes enviar 'origen' y 'destino' (números)."}), 400
         criterio = data.get("criterio", CRITERIO_OFICIAL)
         if criterio not in CLAVE_PESO:
             criterio = CRITERIO_OFICIAL
@@ -758,6 +781,23 @@ def api_dia(dia_num):
         return jsonify({"exito": False, "error": str(e)}), 500
 
 
+@app.route("/api/geometria", methods=["POST"])
+def api_geometria():
+    """Geometría por carretera (OSRM) para un camino dado (lista de ids de nodos)."""
+    try:
+        data = request.get_json(silent=True) or {}
+        camino = data.get("camino")
+        atractivos = ATRACTIVOS
+        if (not isinstance(camino, list) or len(camino) < 2
+                or any(not isinstance(n, int) or n not in atractivos for n in camino)):
+            return jsonify({"exito": False, "error": "Camino inválido."}), 400
+        return jsonify({"exito": True,
+                        "puntos_ruta": geometria_camino(atractivos, camino)})
+    except Exception as e:
+        print("ERROR API GEOMETRIA:", e)
+        return jsonify({"exito": False, "error": str(e)}), 500
+
+
 @app.route("/api/grafo")
 def api_grafo():
     """
@@ -775,7 +815,9 @@ def api_grafo():
             "k_vecinos": K_VECINOS,
             "factor_desvio": FACTOR_DESVIO,
             "num_aristas": grafo["num_aristas"],
-            "aristas_base": grafo["aristas_base"],
+            "conectar_hubs": CONECTAR_HUBS,
+            "aristas_kmst": grafo["aristas_kmst"],
+            "aristas_hubs": grafo["aristas_hubs"],
             "aristas_reparadas": grafo["aristas_reparadas"],
             "lista_reparadas": [
                 {"a": a, "b": b,
@@ -856,6 +898,7 @@ if __name__ == "__main__":
     print(f"Fuente activa: {FUENTE_COORDENADAS.upper()}")
     print(f"Criterio oficial: {CRITERIO_OFICIAL.upper()}")
     print(f"Vecinos por nodo (K): {K_VECINOS}")
+    print(f"Ciudades-hub conectadas entre sí: {'SÍ' if CONECTAR_HUBS else 'NO'}")
     print(f"Desvío máximo permitido: {FACTOR_DESVIO} (+{round((FACTOR_DESVIO - 1) * 100)}%)")
     print(f"Factor de holgura: {FACTOR_HOLGURA} (+{round((FACTOR_HOLGURA - 1) * 100)}%)")
     print("\nServidor iniciado.")
