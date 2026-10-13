@@ -2,11 +2,35 @@
 """
 Plataforma de Rutas Turísticas - Provincia de Coclé, Panamá
 Servidor Flask + algoritmo de Dijkstra (+ OSRM para dibujar el trazado).
+
+═══════════════════════════════════════════════════════════════════════════════
+ARQUITECTURA
+═══════════════════════════════════════════════════════════════════════════════
+• CRITERIO OFICIAL DE EVALUACIÓN: DISTANCIA (km). Tiempo y costo se reportan
+  solo como valores de REFERENCIA.
+• Fuente OFICIAL "google": grafo de 29 nodos y 57 aristas medidas en Google Maps
+  (km y minutos), idéntico al del script rutas_cocle_dijkstra.py. Así, la
+  plataforma y el script producen exactamente los mismos resultados.
+• Fuente "osm" (solo análisis de sensibilidad): grafo generado con K vecinos
+  más cercanos + árbol de expansión mínima + hubs + reparación de desvíos, con
+  pesos reales de OSRM sobre coordenadas de OpenStreetMap.
+• Camino mínimo: Dijkstra con cola de prioridad (heapq).
+• Orden de visita de cada día: TSP exacto por permutaciones sobre las
+  distancias mínimas de Dijkstra, saliendo y regresando a Penonomé (nodo 15).
+• Costo (referencia) = distancia × COSTO_POR_KM.
+• Búsqueda de hoteles / restaurantes / atractivos: datos abiertos de
+  OpenStreetMap (Overpass API), descargados UNA vez para toda la provincia y
+  guardados en osm_cache.json; el filtrado por radio/texto se hace localmente.
+  No se inventan precios de hoteles.
+• Precios de combustible: Secretaría Nacional de Energía (SNE), actualizados
+  cada 14 días (ver COMBUSTIBLE y combustible.json).
 """
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from werkzeug.exceptions import HTTPException
 import json
 import os
 import threading
@@ -26,23 +50,20 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # ============================================================
 
 OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
-
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
-    "https://overpass.osm.jp/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
-
-COSTO_POR_KM = 0.15
+COSTO_POR_KM = 0.15              # USD/km (referencia; justificar en la tesis)
 TIMEOUT = 30
 MAX_RETRIES = 3
 VELOCIDAD_FALLBACK_KMH = 40
 
-# 🔧 FIX 1: timeout corto por mirror de Overpass.
-# 4 mirrors × 6s = 24s máximo, seguro por debajo del límite de Render (30s).
-TIMEOUT_OVERPASS = 6
-
+# Con el grafo oficial de Google Maps el tiempo ya es "real"; por eso el factor
+# de holgura por defecto es 1.0 (los resultados coinciden con el script Python).
+# Para añadir margen: variable de entorno FACTOR_HOLGURA=1.25
 FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.0"))
 
 CRITERIO_OFICIAL = "distancia"
@@ -53,11 +74,15 @@ CONECTAR_HUBS = os.environ.get("CONECTAR_HUBS", "1") != "0"
 MOSTRAR_NODOS_DE_PASO = os.environ.get("MOSTRAR_NODOS_DE_PASO", "0") == "1"
 BASE = 15  # Penonomé
 
-CLAVE_PESO = {"distancia": "distancia_km"}
+CLAVE_PESO = {"distancia": "distancia_km"}  # único criterio de optimización
 
 # ============================================================
-# PRECIOS DE COMBUSTIBLE (SNE)
+# PRECIOS DE COMBUSTIBLE (SNE) - ACTUALIZAR CADA 14 DÍAS
 # ============================================================
+# Fuente: Secretaría Nacional de Energía de Panamá (precios máximos, B/. por litro).
+# Cotejado con Telemetro (lista por localidad) e Infobae del 30-sep-2026.
+# Para actualizar sin tocar el código: crear combustible.json con la misma
+# estructura (ver /api/combustible). Próxima actualización oficial: 16-oct-2026.
 COMBUSTIBLE = {
     "vigente_desde": "2026-10-02T06:00:00-05:00",
     "vigente_hasta": "2026-10-16T05:59:00-05:00",
@@ -93,6 +118,8 @@ def cargar_combustible():
 # ============================================================
 # DATOS: 29 ATRACTIVOS
 # ============================================================
+# (id, nombre, cod, tipo, lat, lng, descripcion) - coordenadas Google Maps
+# (iguales al diccionario COORDENADAS del script Python; nodos 9, 10 y 19 actualizados).
 _BASE = [
     (1, "Playa Santa Clara", "PSC", "Playa", 8.37388, -80.10569, "Playa de arena blanca y aguas tranquilas"),
     (2, "Playa Farallón", "PFA", "Playa", 8.36130, -80.12977, "Playa con olas moderadas y arena dorada"),
@@ -124,6 +151,7 @@ _BASE = [
     (28, "Mariposario", "MAR", "Naturaleza", 8.60141, -80.12923, "Jardín de mariposas"),
     (29, "Canopy Adventure", "CAN", "Aventura", 8.62585, -80.13870, "Tirolesa y aventura en la selva"),
 ]
+# Coordenadas alternativas (OpenStreetMap) para el análisis de sensibilidad
 _OSM_COORD = {
     1: (8.37571, -80.10372), 2: (8.35894, -80.13333), 3: (8.202045, -80.483697),
     4: (8.34490, -80.15400), 5: (8.319702725314118, -80.205259322496),
@@ -144,7 +172,8 @@ ATRACTIVOS_OSM = {i: {**v, "lat": _OSM_COORD[i][0], "lng": _OSM_COORD[i][1]}
                   for i, v in ATRACTIVOS_GOOGLE.items()}
 
 # ============================================================
-# ARISTAS OFICIALES (Google Maps)
+# ARISTAS OFICIALES (Google Maps): (origen, destino, km, minutos)
+# Idéntico a ARISTAS_RAW de rutas_cocle_dijkstra.py (57 aristas).
 # ============================================================
 ARISTAS_GOOGLE = [
     (15, 17, 22.3, 27), (15, 10, 30.1, 33), (15, 16, 50.2, 49), (15, 18, 18.4, 23),
@@ -179,7 +208,7 @@ def obtener_atractivos_por_fuente(fuente):
 ATRACTIVOS = obtener_atractivos_por_fuente(FUENTE_COORDENADAS)
 
 # ============================================================
-# ITINERARIO DE 7 DÍAS
+# ITINERARIO DE 7 DÍAS (igual que DIAS_CONFIG del script Python)
 # ============================================================
 DIAS = [
     {"dia": 1, "destinos": [1, 2, 4, 5, 17], "zona": "🌊 Playas de Antón"},
@@ -209,7 +238,7 @@ def peso_arista_fallback(lat1, lng1, lat2, lng2):
 
 
 # ============================================================
-# OSRM
+# OSRM (solo geometría y, en modo "osm", pesos)
 # ============================================================
 
 def obtener_matrices_osrm(atractivos):
@@ -237,8 +266,7 @@ def obtener_ruta_multi_punto(puntos, con_geometria=True):
     params = {"overview": "full" if con_geometria else "false", "geometries": "geojson", "steps": "false"}
     for intento in range(MAX_RETRIES):
         try:
-            # 🔧 FIX 2: timeout reducido de 60s a 10s.
-            r = requests.get(url, params=params, timeout=10)
+            r = requests.get(url, params=params, timeout=60)
             data = r.json()
             if r.status_code == 200 and data.get("code") == "Ok":
                 ruta = data["routes"][0]
@@ -254,10 +282,11 @@ def obtener_ruta_multi_punto(puntos, con_geometria=True):
 
 
 # ============================================================
-# DIJKSTRA
+# DIJKSTRA (definido antes del grafo: la reparación de desvíos lo usa)
 # ============================================================
 
 def dijkstra(grafo, origen, criterio="distancia", destino=None):
+    """Dijkstra con heapq. Devuelve (dist, prev)."""
     clave = CLAVE_PESO[criterio]
     ady = grafo["ady"]
     dist = {n: math.inf for n in ady}
@@ -294,6 +323,7 @@ def reconstruir_camino(prev, origen, destino):
 # ============================================================
 
 def construir_grafo_google(atractivos):
+    """Grafo OFICIAL: 57 aristas medidas en Google Maps (igual que el script Python)."""
     ids = sorted(atractivos)
     ady = {n: {} for n in ids}
     pares = set()
@@ -309,6 +339,7 @@ def construir_grafo_google(atractivos):
 
 
 def construir_grafo_osrm(atractivos):
+    """Grafo de SENSIBILIDAD: KNN + MST + hubs + reparación de desvíos con pesos OSRM."""
     ids = sorted(atractivos)
 
     def hav(a, b):
@@ -411,6 +442,7 @@ def metricas_camino(grafo, camino):
 
 
 def orden_optimo_visita(grafo, destinos, criterio="distancia"):
+    """TSP exacto (permutaciones) sobre distancias mínimas de Dijkstra; base = Penonomé."""
     paradas = []
     for d in destinos:
         if d != BASE and d not in paradas:
@@ -443,11 +475,11 @@ def geometria_camino(atractivos, camino):
         r = obtener_ruta_multi_punto(puntos, con_geometria=True)
         if r.get("exito") and len(r.get("puntos_ruta", [])) >= 2:
             return r["puntos_ruta"]
-    return [[lat, lng] for lat, lng in puntos]
+    return [[lat, lng] for lat, lng in puntos]  # respaldo: línea recta
 
 
 # ============================================================
-# AUTODIAGNÓSTICO
+# AUTODIAGNÓSTICO DE DATOS
 # ============================================================
 
 def diagnostico_datos():
@@ -470,6 +502,7 @@ def diagnostico_datos():
         h = distancia_haversine(a["lat"], a["lng"], b["lat"], b["lng"])
         if h > km + 0.05:
             avisos.append(f"{a['cod']}-{b['cod']}: carretera {km} km < línea recta {h:.2f} km (revisar medición)")
+    # conectividad (BFS)
     ady = {i: set() for i in ids}
     for u, v, _, _ in ARISTAS_GOOGLE:
         ady[u].add(v)
@@ -492,12 +525,9 @@ def diagnostico_datos():
 
 
 # ============================================================
-# BÚSQUEDA (OpenStreetMap / Overpass) con caché en disco
+# BÚSQUEDA (OpenStreetMap / Overpass) - descarga única + caché en disco
 # ============================================================
-_CACHE_BUSQ = {}
-_CACHE_TTL = 3600
-_CACHE_DISCO = os.path.join(BASE_DIR, "cache_busqueda.json")  # 🔧 FIX 3: caché en disco
-BBOX_COCLE = (8.15, -80.75, 8.75, -80.05)
+BBOX_COCLE = (8.15, -80.75, 8.75, -80.05)  # sur, oeste, norte, este
 
 CATEGORIAS = {
     "hotel": '["tourism"~"^(hotel|hostel|guest_house|motel|apartment|resort|chalet)$"]',
@@ -512,58 +542,100 @@ ETIQUETAS_TIPO = {
     "zoo": "Zoológico", "theme_park": "Parque temático", "artwork": "Arte público",
 }
 
-
-def _cargar_cache_disco():
-    if os.path.exists(_CACHE_DISCO):
-        try:
-            with open(_CACHE_DISCO, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"  ⚠ No se pudo leer caché de disco: {e}")
-    return {}
+CACHE_FILE = os.path.join(BASE_DIR, "osm_cache.json")
+CACHE_TTL_PROV = 12 * 3600
+TIPOS_HOTEL = {"hotel", "hostel", "guest_house", "motel", "apartment", "resort", "chalet"}
+TIPOS_REST = {"restaurant", "cafe", "fast_food", "bar"}
+TIPOS_ATRAC = {"attraction", "museum", "viewpoint", "gallery", "zoo", "theme_park", "artwork"}
+_PROV = {"t": 0.0, "elems": None, "cargando": False}
+_PROV_LOCK = threading.Lock()
 
 
-def _guardar_cache_disco(cache):
+def _clasificar(t):
+    if t.get("tourism") in TIPOS_HOTEL:
+        return "hotel"
+    if t.get("amenity") in TIPOS_REST:
+        return "restaurante"
+    if t.get("tourism") in TIPOS_ATRAC:
+        return "atraccion"
+    return None
+
+
+def _overpass_carrera(q):
+    """Consulta todos los servidores a la vez y devuelve el primero que responda bien."""
+    def uno(url):
+        r = requests.post(url, data={"data": q}, timeout=(4, 30),
+                          headers={"User-Agent": "RutasCocleTesis/1.0"})
+        if r.status_code != 200:
+            raise RuntimeError(f"HTTP {r.status_code}")
+        return r.json().get("elements", [])
+
+    ex = ThreadPoolExecutor(max_workers=len(OVERPASS_URLS))
+    futs = [ex.submit(uno, u) for u in OVERPASS_URLS]
+    ultimo = "sin respuesta"
     try:
-        with open(_CACHE_DISCO, "w", encoding="utf-8") as f:
-            json.dump(cache, f, ensure_ascii=False)
-    except Exception as e:
-        print(f"  ⚠ No se pudo guardar caché de disco: {e}")
-
-
-_CACHE_DISCO_DATA = _cargar_cache_disco()
-
-
-def _consulta_overpass(categoria, lat=None, lng=None, radio_m=None):
-    filtro = CATEGORIAS[categoria]
-    if lat is not None:
-        area = f"(around:{int(radio_m)},{lat},{lng})"
-    else:
-        s, o, n, e = BBOX_COCLE
-        area = f"({s},{o},{n},{e})"
-    q = f"[out:json][timeout:15];(nwr{filtro}{area};);out center tags 120;"
-    ultimo = None
-    for url in OVERPASS_URLS:
-        try:
-            # 🔧 FIX 1: timeout corto (6s) por mirror.
-            r = requests.post(url, data={"data": q}, timeout=TIMEOUT_OVERPASS,
-                              headers={"User-Agent": "RutasCocleTesis/1.0"})
-            if r.status_code == 200:
-                try:
-                    return r.json().get("elements", [])
-                except ValueError:
-                    ultimo = f"{url}: respuesta no-JSON"
-                    print(f"  ⚠ {ultimo}")
-                    continue
-            ultimo = f"{url}: HTTP {r.status_code}"
-            print(f"  ⚠ {ultimo}")
-        except requests.exceptions.Timeout:
-            ultimo = f"{url}: timeout {TIMEOUT_OVERPASS}s"
-            print(f"  ⚠ {ultimo}")
-        except Exception as e:
-            ultimo = f"{url}: {e}"
-            print(f"  ⚠ {ultimo}")
+        for f in as_completed(futs, timeout=35):
+            try:
+                return f.result()
+            except Exception as e:
+                ultimo = str(e)
+    except Exception:
+        ultimo = "tiempo agotado"
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
     raise RuntimeError(f"Overpass no respondió ({ultimo})")
+
+
+def _descargar_provincia():
+    s, o, n, e = BBOX_COCLE
+    area = f"({s},{o},{n},{e})"
+    partes = "".join(f"nwr{f}{area};" for f in CATEGORIAS.values())
+    return _overpass_carrera(f"[out:json][timeout:30];({partes});out center tags;")
+
+
+def _leer_cache():
+    try:
+        with open(CACHE_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+        if isinstance(d.get("elems"), list) and d["elems"]:
+            _PROV["elems"], _PROV["t"] = d["elems"], float(d.get("t", 0))
+    except Exception:
+        pass
+
+
+def _refrescar_provincia():
+    with _PROV_LOCK:
+        if _PROV["cargando"]:
+            return
+        _PROV["cargando"] = True
+    try:
+        elems = _descargar_provincia()
+        if elems:
+            _PROV["elems"], _PROV["t"] = elems, time.time()
+            try:
+                with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump({"t": _PROV["t"], "elems": elems}, f)
+            except Exception as e:
+                print("  ⚠ No se pudo guardar osm_cache.json:", e)
+    except Exception as e:
+        print("  ⚠ Descarga OSM falló:", e)
+    finally:
+        _PROV["cargando"] = False
+
+
+def _obtener_provincia(espera=20):
+    if _PROV["elems"] is None:
+        _leer_cache()
+    if _PROV["elems"] is not None:
+        if time.time() - _PROV["t"] > CACHE_TTL_PROV and not _PROV["cargando"]:
+            threading.Thread(target=_refrescar_provincia, daemon=True).start()
+        return _PROV["elems"]
+    th = threading.Thread(target=_refrescar_provincia, daemon=True)
+    th.start()
+    fin = time.time() + espera
+    while time.time() < fin and _PROV["elems"] is None and (th.is_alive() or _PROV["cargando"]):
+        time.sleep(0.3)
+    return _PROV["elems"]
 
 
 def _normalizar(el, categoria, lat0, lng0):
@@ -588,27 +660,6 @@ def _normalizar(el, categoria, lat0, lng0):
         "distancia_km": round(distancia_haversine(lat0, lng0, lat, lng), 2) if lat0 is not None else None,
         "google_maps": f"https://www.google.com/maps/search/?api=1&query={lat},{lng}",
     }
-
-
-# ============================================================
-# MANEJADORES GLOBALES DE ERROR (JSON, no HTML)
-# ============================================================
-@app.errorhandler(404)
-def error_404(e):
-    return jsonify({"exito": False, "error": "Recurso no encontrado"}), 404
-
-@app.errorhandler(405)
-def error_405(e):
-    return jsonify({"exito": False, "error": "Método no permitido"}), 405
-
-@app.errorhandler(500)
-def error_500(e):
-    return jsonify({"exito": False, "error": "Error interno del servidor"}), 500
-
-@app.errorhandler(Exception)
-def error_general(e):
-    print("❌ ERROR NO CONTROLADO:", repr(e))
-    return jsonify({"exito": False, "error": f"Error del servidor: {e}"}), 500
 
 
 # ============================================================
@@ -740,6 +791,7 @@ def api_grafo():
 
 @app.route("/api/salud")
 def api_salud():
+    """Autodiagnóstico de datos (útil como evidencia de integridad en la tesis)."""
     return jsonify({"exito": True, **diagnostico_datos(), "fuente_activa": FUENTE_COORDENADAS})
 
 
@@ -757,6 +809,7 @@ def api_dias():
 
 @app.route("/api/sitios")
 def api_sitios():
+    """Fichas detalladas de los 29 sitios."""
     return jsonify({str(n): ficha_completa(n, d) for n, d in ATRACTIVOS.items()})
 
 
@@ -787,6 +840,7 @@ def api_combustible():
         "url_referencia": c.get("url_referencia", ""), "moneda": c["moneda"],
         "localidad_proyecto": c["localidad_proyecto"], "localidades": locs,
         "costo_por_km_modelo": COSTO_POR_KM,
+        # km/L que implicaría COSTO_POR_KM con la gasolina 95 de la localidad del proyecto
         "rendimiento_equivalente_km_l": round(p95 / COSTO_POR_KM, 1),
         "rendimiento_equivalente_km_gal": round(p95 / COSTO_POR_KM * LITROS_POR_GALON, 1),
         "litros_por_galon": LITROS_POR_GALON,
@@ -797,13 +851,10 @@ def api_combustible():
 @app.route("/api/buscar")
 def api_buscar():
     """
-    🔧 FIX 3: Búsqueda con 3 niveles de respaldo.
-    1. Caché en memoria (< 1 hora)
-    2. Overpass en vivo (6s × 4 mirrors)
-    3. Caché en disco (respaldo permanente)
-    NUNCA devuelve error 500.
+    Parámetros: tipo=hotel|restaurante|atraccion|todos, q=texto, cerca=<id nodo>, radio=<km>
+    Fuente: OpenStreetMap (Overpass), descargado una vez y filtrado localmente.
+    No incluye precios (OSM no los publica).
     """
-    global _CACHE_DISCO_DATA
     try:
         tipo = request.args.get("tipo", "todos")
         q = (request.args.get("q") or "").strip().lower()[:60]
@@ -816,62 +867,43 @@ def api_buscar():
             if cerca not in ATRACTIVOS:
                 return jsonify({"exito": False, "error": "Sitio de referencia inválido."}), 400
             lat0, lng0 = ATRACTIVOS[cerca]["lat"], ATRACTIVOS[cerca]["lng"]
-        cats = list(CATEGORIAS) if tipo == "todos" else [tipo]
-        resultados, errores = [], []
-        uso_cache_disco = False
-        for cat in cats:
-            clave = f"{cat}|{cerca}|{radio if cerca else 'prov'}"
-            elems = None
-            # Nivel 1: caché en memoria
-            hit = _CACHE_BUSQ.get(clave)
-            if hit and time.time() - hit[0] < _CACHE_TTL:
-                elems = hit[1]
-            else:
-                # Nivel 2: Overpass en vivo
-                try:
-                    elems = _consulta_overpass(cat, lat0, lng0, radio * 1000 if cerca else None)
-                    _CACHE_BUSQ[clave] = (time.time(), elems)
-                    _CACHE_DISCO_DATA[clave] = {"elementos": elems, "timestamp": time.time()}
-                    _guardar_cache_disco(_CACHE_DISCO_DATA)
-                except Exception as e:
-                    errores.append(f"{cat}: {e}")
-                    # Nivel 3: caché de disco
-                    if clave in _CACHE_DISCO_DATA:
-                        elems = _CACHE_DISCO_DATA[clave].get("elementos", [])
-                        uso_cache_disco = True
-                        print(f"  ↺ Usando caché de disco para {cat}")
-                    else:
-                        elems = []
-            for el in elems:
+
+        elems = _obtener_provincia()
+        if elems is None:
+            return jsonify({"exito": True, "total": 0, "resultados": [], "avisos": [],
+                            "fuente": "OpenStreetMap (Overpass API)",
+                            "nota": "Los datos se están descargando por primera vez. "
+                                    "Vuelve a pulsar buscar en unos segundos."})
+
+        resultados, vistos = [], set()
+        for el in elems:
+            try:
+                cat = _clasificar(el.get("tags", {}))
+                if cat is None or (tipo != "todos" and cat != tipo):
+                    continue
                 r = _normalizar(el, cat, lat0, lng0)
-                if r and (not q or q in r["nombre"].lower() or q in (r["cocina"] or "").lower()
-                          or q in r["subtipo"].lower()):
-                    resultados.append(r)
-        resultados.sort(key=lambda r: (r["distancia_km"] if r["distancia_km"] is not None else 99999, r["nombre"]))
-        fuente = "OpenStreetMap (Overpass API)"
-        aviso = ""
-        if uso_cache_disco:
-            fuente = "OpenStreetMap (caché local)"
-            aviso = "El servicio en vivo no respondió; mostrando resultados guardados. Pueden estar desactualizados."
-        return jsonify({
-            "exito": True,
-            "total": len(resultados),
-            "resultados": resultados[:60],
-            "fuente": fuente,
-            "avisos": ([aviso] if aviso else []) + errores,
-            "nota": "Los precios no están disponibles en OpenStreetMap; confirme tarifas directamente con cada establecimiento."
-        })
+                if not r:
+                    continue
+                if lat0 is not None and r["distancia_km"] > radio:
+                    continue
+                if q and not (q in r["nombre"].lower() or q in (r["cocina"] or "").lower()
+                              or q in r["subtipo"].lower()):
+                    continue
+                clave = (r["nombre"], round(r["lat"], 4), round(r["lng"], 4))
+                if clave in vistos:
+                    continue
+                vistos.add(clave)
+                resultados.append(r)
+            except Exception:
+                continue
+        resultados.sort(key=lambda r: (r["distancia_km"] if r["distancia_km"] is not None else 0, r["nombre"]))
+        return jsonify({"exito": True, "total": len(resultados), "resultados": resultados[:60],
+                        "fuente": "OpenStreetMap (Overpass API)", "avisos": [],
+                        "nota": "Los precios no están disponibles en OpenStreetMap; confirme tarifas "
+                                "directamente con cada establecimiento."})
     except Exception as e:
-        print("ERROR API BUSCAR:", e)
-        # 🔧 FIX: NUNCA devolvemos 500. Siempre JSON.
-        return jsonify({
-            "exito": True,
-            "total": 0,
-            "resultados": [],
-            "fuente": "OpenStreetMap",
-            "avisos": [f"Búsqueda no disponible temporalmente: {e}"],
-            "nota": "Intenta de nuevo en unos segundos."
-        })
+        app.logger.exception("ERROR API BUSCAR")
+        return jsonify({"exito": False, "error": str(e)}), 500
 
 
 @app.route("/api/fuente", methods=["GET"])
@@ -900,6 +932,27 @@ def api_fuente_post():
                         "es_oficial": nueva == FUENTE_OFICIAL, "total_atractivos": len(ATRACTIVOS)})
     except Exception as e:
         return jsonify({"exito": False, "error": str(e)}), 500
+
+
+# ============================================================
+# MANEJO GLOBAL DE ERRORES (las rutas /api/* siempre responden JSON)
+# ============================================================
+
+@app.errorhandler(Exception)
+def manejar_error(e):
+    code = e.code if isinstance(e, HTTPException) else 500
+    if request.path.startswith("/api/"):
+        if not isinstance(e, HTTPException):
+            app.logger.exception("Error no controlado")
+        return jsonify({"exito": False, "error": getattr(e, "description", None) or str(e)}), code
+    if isinstance(e, HTTPException):
+        return e
+    app.logger.exception("Error no controlado")
+    return "Error interno del servidor", 500
+
+
+# Precarga en segundo plano al arrancar (no bloquea el servidor)
+threading.Thread(target=_obtener_provincia, kwargs={"espera": 0}, daemon=True).start()
 
 
 if __name__ == "__main__":
