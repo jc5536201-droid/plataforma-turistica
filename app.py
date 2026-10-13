@@ -34,13 +34,13 @@ OVERPASS_URLS = [
     "https://overpass.osm.jp/api/interpreter",
 ]
 
-COSTO_POR_KM = 0.15              # USD/km (referencia)
+COSTO_POR_KM = 0.15
 TIMEOUT = 30
 MAX_RETRIES = 3
 VELOCIDAD_FALLBACK_KMH = 40
 
-# >>> FIX IMPORTANTE: timeout corto por mirror de Overpass.
-# 4 mirrors x 6s = 24s máximo, seguro por debajo del límite de Render (30s).
+# 🔧 FIX 1: timeout corto por mirror de Overpass.
+# 4 mirrors × 6s = 24s máximo, seguro por debajo del límite de Render (30s).
 TIMEOUT_OVERPASS = 6
 
 FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.0"))
@@ -237,6 +237,7 @@ def obtener_ruta_multi_punto(puntos, con_geometria=True):
     params = {"overview": "full" if con_geometria else "false", "geometries": "geojson", "steps": "false"}
     for intento in range(MAX_RETRIES):
         try:
+            # 🔧 FIX 2: timeout reducido de 60s a 10s.
             r = requests.get(url, params=params, timeout=10)
             data = r.json()
             if r.status_code == 200 and data.get("code") == "Ok":
@@ -491,10 +492,11 @@ def diagnostico_datos():
 
 
 # ============================================================
-# BÚSQUEDA (OpenStreetMap / Overpass)
+# BÚSQUEDA (OpenStreetMap / Overpass) con caché en disco
 # ============================================================
 _CACHE_BUSQ = {}
 _CACHE_TTL = 3600
+_CACHE_DISCO = os.path.join(BASE_DIR, "cache_busqueda.json")  # 🔧 FIX 3: caché en disco
 BBOX_COCLE = (8.15, -80.75, 8.75, -80.05)
 
 CATEGORIAS = {
@@ -511,6 +513,27 @@ ETIQUETAS_TIPO = {
 }
 
 
+def _cargar_cache_disco():
+    if os.path.exists(_CACHE_DISCO):
+        try:
+            with open(_CACHE_DISCO, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"  ⚠ No se pudo leer caché de disco: {e}")
+    return {}
+
+
+def _guardar_cache_disco(cache):
+    try:
+        with open(_CACHE_DISCO, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"  ⚠ No se pudo guardar caché de disco: {e}")
+
+
+_CACHE_DISCO_DATA = _cargar_cache_disco()
+
+
 def _consulta_overpass(categoria, lat=None, lng=None, radio_m=None):
     filtro = CATEGORIAS[categoria]
     if lat is not None:
@@ -522,7 +545,7 @@ def _consulta_overpass(categoria, lat=None, lng=None, radio_m=None):
     ultimo = None
     for url in OVERPASS_URLS:
         try:
-            # >>> FIX: timeout corto (6s) por mirror para no exceder el límite de Render (30s).
+            # 🔧 FIX 1: timeout corto (6s) por mirror.
             r = requests.post(url, data={"data": q}, timeout=TIMEOUT_OVERPASS,
                               headers={"User-Agent": "RutasCocleTesis/1.0"})
             if r.status_code == 200:
@@ -540,7 +563,7 @@ def _consulta_overpass(categoria, lat=None, lng=None, radio_m=None):
         except Exception as e:
             ultimo = f"{url}: {e}"
             print(f"  ⚠ {ultimo}")
-    raise RuntimeError(f"Overpass no respondió en ningún mirror ({ultimo})")
+    raise RuntimeError(f"Overpass no respondió ({ultimo})")
 
 
 def _normalizar(el, categoria, lat0, lng0):
@@ -568,7 +591,7 @@ def _normalizar(el, categoria, lat0, lng0):
 
 
 # ============================================================
-# MANEJADORES GLOBALES DE ERROR (devuelven JSON, no HTML)
+# MANEJADORES GLOBALES DE ERROR (JSON, no HTML)
 # ============================================================
 @app.errorhandler(404)
 def error_404(e):
@@ -773,6 +796,14 @@ def api_combustible():
 
 @app.route("/api/buscar")
 def api_buscar():
+    """
+    🔧 FIX 3: Búsqueda con 3 niveles de respaldo.
+    1. Caché en memoria (< 1 hora)
+    2. Overpass en vivo (6s × 4 mirrors)
+    3. Caché en disco (respaldo permanente)
+    NUNCA devuelve error 500.
+    """
+    global _CACHE_DISCO_DATA
     try:
         tipo = request.args.get("tipo", "todos")
         q = (request.args.get("q") or "").strip().lower()[:60]
@@ -787,34 +818,60 @@ def api_buscar():
             lat0, lng0 = ATRACTIVOS[cerca]["lat"], ATRACTIVOS[cerca]["lng"]
         cats = list(CATEGORIAS) if tipo == "todos" else [tipo]
         resultados, errores = [], []
+        uso_cache_disco = False
         for cat in cats:
-            clave = (cat, cerca, radio if cerca else None)
+            clave = f"{cat}|{cerca}|{radio if cerca else 'prov'}"
+            elems = None
+            # Nivel 1: caché en memoria
             hit = _CACHE_BUSQ.get(clave)
             if hit and time.time() - hit[0] < _CACHE_TTL:
                 elems = hit[1]
             else:
+                # Nivel 2: Overpass en vivo
                 try:
                     elems = _consulta_overpass(cat, lat0, lng0, radio * 1000 if cerca else None)
                     _CACHE_BUSQ[clave] = (time.time(), elems)
+                    _CACHE_DISCO_DATA[clave] = {"elementos": elems, "timestamp": time.time()}
+                    _guardar_cache_disco(_CACHE_DISCO_DATA)
                 except Exception as e:
                     errores.append(f"{cat}: {e}")
-                    continue
+                    # Nivel 3: caché de disco
+                    if clave in _CACHE_DISCO_DATA:
+                        elems = _CACHE_DISCO_DATA[clave].get("elementos", [])
+                        uso_cache_disco = True
+                        print(f"  ↺ Usando caché de disco para {cat}")
+                    else:
+                        elems = []
             for el in elems:
                 r = _normalizar(el, cat, lat0, lng0)
                 if r and (not q or q in r["nombre"].lower() or q in (r["cocina"] or "").lower()
                           or q in r["subtipo"].lower()):
                     resultados.append(r)
-        if not resultados and errores and len(errores) == len(cats):
-            return jsonify({"exito": False, "error": "No se pudo consultar OpenStreetMap ahora. "
-                            "Intenta de nuevo en unos segundos.", "detalle": errores}), 502
-        resultados.sort(key=lambda r: (r["distancia_km"] if r["distancia_km"] is not None else 0, r["nombre"]))
-        return jsonify({"exito": True, "total": len(resultados), "resultados": resultados[:60],
-                        "fuente": "OpenStreetMap (Overpass API)", "avisos": errores,
-                        "nota": "Los precios no están disponibles en OpenStreetMap; confirme tarifas "
-                                "directamente con cada establecimiento."})
+        resultados.sort(key=lambda r: (r["distancia_km"] if r["distancia_km"] is not None else 99999, r["nombre"]))
+        fuente = "OpenStreetMap (Overpass API)"
+        aviso = ""
+        if uso_cache_disco:
+            fuente = "OpenStreetMap (caché local)"
+            aviso = "El servicio en vivo no respondió; mostrando resultados guardados. Pueden estar desactualizados."
+        return jsonify({
+            "exito": True,
+            "total": len(resultados),
+            "resultados": resultados[:60],
+            "fuente": fuente,
+            "avisos": ([aviso] if aviso else []) + errores,
+            "nota": "Los precios no están disponibles en OpenStreetMap; confirme tarifas directamente con cada establecimiento."
+        })
     except Exception as e:
         print("ERROR API BUSCAR:", e)
-        return jsonify({"exito": False, "error": str(e)}), 500
+        # 🔧 FIX: NUNCA devolvemos 500. Siempre JSON.
+        return jsonify({
+            "exito": True,
+            "total": 0,
+            "resultados": [],
+            "fuente": "OpenStreetMap",
+            "avisos": [f"Búsqueda no disponible temporalmente: {e}"],
+            "nota": "Intenta de nuevo en unos segundos."
+        })
 
 
 @app.route("/api/fuente", methods=["GET"])
