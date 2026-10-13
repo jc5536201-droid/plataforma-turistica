@@ -46,10 +46,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # ============================================================
 
 OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
+
+# 🔧 PARCHE 1: más mirrors de Overpass (antes eran 2, ahora 4)
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.osm.jp/api/interpreter",
 ]
+
 COSTO_POR_KM = 0.15              # USD/km (referencia; justificar en la tesis)
 TIMEOUT = 30
 MAX_RETRIES = 3
@@ -73,10 +78,6 @@ CLAVE_PESO = {"distancia": "distancia_km"}  # único criterio de optimización
 # ============================================================
 # PRECIOS DE COMBUSTIBLE (SNE) - ACTUALIZAR CADA 14 DÍAS
 # ============================================================
-# Fuente: Secretaría Nacional de Energía de Panamá (precios máximos, B/. por litro).
-# Cotejado con Telemetro (lista por localidad) e Infobae del 30-sep-2026.
-# Para actualizar sin tocar el código: crear combustible.json con la misma
-# estructura (ver /api/combustible). Próxima actualización oficial: 16-oct-2026.
 COMBUSTIBLE = {
     "vigente_desde": "2026-10-02T06:00:00-05:00",
     "vigente_hasta": "2026-10-16T05:59:00-05:00",
@@ -112,8 +113,6 @@ def cargar_combustible():
 # ============================================================
 # DATOS: 29 ATRACTIVOS
 # ============================================================
-# (id, nombre, cod, tipo, lat, lng, descripcion) - coordenadas Google Maps
-# (iguales al diccionario COORDENADAS del script Python; nodos 9, 10 y 19 actualizados).
 _BASE = [
     (1, "Playa Santa Clara", "PSC", "Playa", 8.37388, -80.10569, "Playa de arena blanca y aguas tranquilas"),
     (2, "Playa Farallón", "PFA", "Playa", 8.36130, -80.12977, "Playa con olas moderadas y arena dorada"),
@@ -145,7 +144,6 @@ _BASE = [
     (28, "Mariposario", "MAR", "Naturaleza", 8.60141, -80.12923, "Jardín de mariposas"),
     (29, "Canopy Adventure", "CAN", "Aventura", 8.62585, -80.13870, "Tirolesa y aventura en la selva"),
 ]
-# Coordenadas alternativas (OpenStreetMap) para el análisis de sensibilidad
 _OSM_COORD = {
     1: (8.37571, -80.10372), 2: (8.35894, -80.13333), 3: (8.202045, -80.483697),
     4: (8.34490, -80.15400), 5: (8.319702725314118, -80.205259322496),
@@ -167,7 +165,6 @@ ATRACTIVOS_OSM = {i: {**v, "lat": _OSM_COORD[i][0], "lng": _OSM_COORD[i][1]}
 
 # ============================================================
 # ARISTAS OFICIALES (Google Maps): (origen, destino, km, minutos)
-# Idéntico a ARISTAS_RAW de rutas_cocle_dijkstra.py (57 aristas).
 # ============================================================
 ARISTAS_GOOGLE = [
     (15, 17, 22.3, 27), (15, 10, 30.1, 33), (15, 16, 50.2, 49), (15, 18, 18.4, 23),
@@ -202,7 +199,7 @@ def obtener_atractivos_por_fuente(fuente):
 ATRACTIVOS = obtener_atractivos_por_fuente(FUENTE_COORDENADAS)
 
 # ============================================================
-# ITINERARIO DE 7 DÍAS (igual que DIAS_CONFIG del script Python)
+# ITINERARIO DE 7 DÍAS
 # ============================================================
 DIAS = [
     {"dia": 1, "destinos": [1, 2, 4, 5, 17], "zona": "🌊 Playas de Antón"},
@@ -276,7 +273,7 @@ def obtener_ruta_multi_punto(puntos, con_geometria=True):
 
 
 # ============================================================
-# DIJKSTRA (definido antes del grafo: la reparación de desvíos lo usa)
+# DIJKSTRA
 # ============================================================
 
 def dijkstra(grafo, origen, criterio="distancia", destino=None):
@@ -317,7 +314,7 @@ def reconstruir_camino(prev, origen, destino):
 # ============================================================
 
 def construir_grafo_google(atractivos):
-    """Grafo OFICIAL: 57 aristas medidas en Google Maps (igual que el script Python)."""
+    """Grafo OFICIAL: 57 aristas medidas en Google Maps."""
     ids = sorted(atractivos)
     ady = {n: {} for n in ids}
     pares = set()
@@ -333,7 +330,7 @@ def construir_grafo_google(atractivos):
 
 
 def construir_grafo_osrm(atractivos):
-    """Grafo de SENSIBILIDAD: KNN + MST + hubs + reparación de desvíos con pesos OSRM."""
+    """Grafo de SENSIBILIDAD: KNN + MST + hubs + reparación con pesos OSRM."""
     ids = sorted(atractivos)
 
     def hav(a, b):
@@ -469,7 +466,7 @@ def geometria_camino(atractivos, camino):
         r = obtener_ruta_multi_punto(puntos, con_geometria=True)
         if r.get("exito") and len(r.get("puntos_ruta", [])) >= 2:
             return r["puntos_ruta"]
-    return [[lat, lng] for lat, lng in puntos]  # respaldo: línea recta
+    return [[lat, lng] for lat, lng in puntos]
 
 
 # ============================================================
@@ -496,7 +493,6 @@ def diagnostico_datos():
         h = distancia_haversine(a["lat"], a["lng"], b["lat"], b["lng"])
         if h > km + 0.05:
             avisos.append(f"{a['cod']}-{b['cod']}: carretera {km} km < línea recta {h:.2f} km (revisar medición)")
-    # conectividad (BFS)
     ady = {i: set() for i in ids}
     for u, v, _, _ in ARISTAS_GOOGLE:
         ady[u].add(v)
@@ -522,7 +518,8 @@ def diagnostico_datos():
 # BÚSQUEDA (OpenStreetMap / Overpass)
 # ============================================================
 _CACHE_BUSQ = {}
-_CACHE_TTL = 600
+# 🔧 PARCHE 4: caché más larga (antes 600 = 10 min, ahora 3600 = 1 hora)
+_CACHE_TTL = 3600
 BBOX_COCLE = (8.15, -80.75, 8.75, -80.05)  # sur, oeste, norte, este
 
 CATEGORIAS = {
@@ -553,11 +550,20 @@ def _consulta_overpass(categoria, lat=None, lng=None, radio_m=None):
             r = requests.post(url, data={"data": q}, timeout=35,
                               headers={"User-Agent": "RutasCocleTesis/1.0"})
             if r.status_code == 200:
-                return r.json().get("elements", [])
-            ultimo = f"HTTP {r.status_code}"
+                # 🔧 PARCHE 3: verificar que sea JSON real (Overpass a veces
+                # devuelve 200 con HTML de mantenimiento o de error)
+                try:
+                    return r.json().get("elements", [])
+                except ValueError:
+                    ultimo = f"{url}: respuesta no-JSON (posible mantenimiento)"
+                    print(f"  ⚠ {ultimo}")
+                    continue
+            ultimo = f"{url}: HTTP {r.status_code}"
+            print(f"  ⚠ {ultimo}")
         except Exception as e:
-            ultimo = str(e)
-    raise RuntimeError(f"Overpass no respondió ({ultimo})")
+            ultimo = f"{url}: {e}"
+            print(f"  ⚠ {ultimo}")
+    raise RuntimeError(f"Overpass no respondió en ningún mirror ({ultimo})")
 
 
 def _normalizar(el, categoria, lat0, lng0):
@@ -582,6 +588,29 @@ def _normalizar(el, categoria, lat0, lng0):
         "distancia_km": round(distancia_haversine(lat0, lng0, lat, lng), 2) if lat0 is not None else None,
         "google_maps": f"https://www.google.com/maps/search/?api=1&query={lat},{lng}",
     }
+
+
+# ============================================================
+# 🔧 PARCHE 2: MANEJADORES GLOBALES DE ERROR
+# ============================================================
+# Esto garantiza que CUALQUIER error no controlado en el servidor devuelva
+# JSON (no HTML). Así el frontend nunca dirá "contenido no-JSON".
+@app.errorhandler(404)
+def error_404(e):
+    return jsonify({"exito": False, "error": "Recurso no encontrado"}), 404
+
+@app.errorhandler(405)
+def error_405(e):
+    return jsonify({"exito": False, "error": "Método no permitido"}), 405
+
+@app.errorhandler(500)
+def error_500(e):
+    return jsonify({"exito": False, "error": "Error interno del servidor"}), 500
+
+@app.errorhandler(Exception)
+def error_general(e):
+    print("❌ ERROR NO CONTROLADO:", repr(e))
+    return jsonify({"exito": False, "error": f"Error del servidor: {e}"}), 500
 
 
 # ============================================================
@@ -713,7 +742,7 @@ def api_grafo():
 
 @app.route("/api/salud")
 def api_salud():
-    """Autodiagnóstico de datos (útil como evidencia de integridad en la tesis)."""
+    """Autodiagnóstico de datos."""
     return jsonify({"exito": True, **diagnostico_datos(), "fuente_activa": FUENTE_COORDENADAS})
 
 
@@ -762,7 +791,6 @@ def api_combustible():
         "url_referencia": c.get("url_referencia", ""), "moneda": c["moneda"],
         "localidad_proyecto": c["localidad_proyecto"], "localidades": locs,
         "costo_por_km_modelo": COSTO_POR_KM,
-        # km/L que implicaría COSTO_POR_KM con la gasolina 95 de la localidad del proyecto
         "rendimiento_equivalente_km_l": round(p95 / COSTO_POR_KM, 1),
         "rendimiento_equivalente_km_gal": round(p95 / COSTO_POR_KM * LITROS_POR_GALON, 1),
         "litros_por_galon": LITROS_POR_GALON,
@@ -774,7 +802,7 @@ def api_combustible():
 def api_buscar():
     """
     Parámetros: tipo=hotel|restaurante|atraccion|todos, q=texto, cerca=<id nodo>, radio=<km>
-    Fuente: OpenStreetMap (Overpass). No incluye precios (OSM no los publica).
+    Fuente: OpenStreetMap (Overpass). No incluye precios.
     """
     try:
         tipo = request.args.get("tipo", "todos")
@@ -843,7 +871,7 @@ def api_fuente_post():
         ATRACTIVOS = obtener_atractivos_por_fuente(nueva)
         return jsonify({"exito": True, "fuente": nueva,
                         "fuente_nombre": "OpenStreetMap" if nueva == "osm" else "Google Maps",
-                        "es_oficial": nueva == FUENTE_OFICIAL, "total_atractivos": len(ATRACTIVOS)})
+                        "es_oficial": nueva == FUENTE_OFICIAL, "total_atractivos": len(ATTRACTIVOS)})
     except Exception as e:
         return jsonify({"exito": False, "error": str(e)}), 500
 
