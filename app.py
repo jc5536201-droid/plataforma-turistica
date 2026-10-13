@@ -47,7 +47,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
 
-# 🔧 PARCHE 1: más mirrors de Overpass (antes eran 2, ahora 4)
+# 🔧 FIX: mirrors de Overpass (4 alternativas)
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -60,9 +60,10 @@ TIMEOUT = 30
 MAX_RETRIES = 3
 VELOCIDAD_FALLBACK_KMH = 40
 
-# Con el grafo oficial de Google Maps el tiempo ya es "real"; por eso el factor
-# de holgura por defecto es 1.0 (los resultados coinciden con el script Python).
-# Para añadir margen: variable de entorno FACTOR_HOLGURA=1.25
+# 🔧 FIX: timeout corto por mirror para no exceder el límite de 30s de Render.
+# 4 mirrors × 6s = 24s máximo, seguro por debajo de 30s.
+TIMEOUT_OVERPASS = 6
+
 FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.0"))
 
 CRITERIO_OFICIAL = "distancia"
@@ -73,7 +74,7 @@ CONECTAR_HUBS = os.environ.get("CONECTAR_HUBS", "1") != "0"
 MOSTRAR_NODOS_DE_PASO = os.environ.get("MOSTRAR_NODOS_DE_PASO", "0") == "1"
 BASE = 15  # Penonomé
 
-CLAVE_PESO = {"distancia": "distancia_km"}  # único criterio de optimización
+CLAVE_PESO = {"distancia": "distancia_km"}
 
 # ============================================================
 # PRECIOS DE COMBUSTIBLE (SNE) - ACTUALIZAR CADA 14 DÍAS
@@ -257,7 +258,8 @@ def obtener_ruta_multi_punto(puntos, con_geometria=True):
     params = {"overview": "full" if con_geometria else "false", "geometries": "geojson", "steps": "false"}
     for intento in range(MAX_RETRIES):
         try:
-            r = requests.get(url, params=params, timeout=60)
+            # 🔧 FIX: timeout reducido a 10s (antes 60s) para no exceder Render.
+            r = requests.get(url, params=params, timeout=10)
             data = r.json()
             if r.status_code == 200 and data.get("code") == "Ok":
                 ruta = data["routes"][0]
@@ -518,9 +520,8 @@ def diagnostico_datos():
 # BÚSQUEDA (OpenStreetMap / Overpass)
 # ============================================================
 _CACHE_BUSQ = {}
-# 🔧 PARCHE 4: caché más larga (antes 600 = 10 min, ahora 3600 = 1 hora)
-_CACHE_TTL = 3600
-BBOX_COCLE = (8.15, -80.75, 8.75, -80.05)  # sur, oeste, norte, este
+_CACHE_TTL = 3600  # 1 hora
+BBOX_COCLE = (8.15, -80.75, 8.75, -80.05)
 
 CATEGORIAS = {
     "hotel": '["tourism"~"^(hotel|hostel|guest_house|motel|apartment|resort|chalet)$"]',
@@ -537,28 +538,35 @@ ETIQUETAS_TIPO = {
 
 
 def _consulta_overpass(categoria, lat=None, lng=None, radio_m=None):
+    """
+    🔧 FIX PRINCIPAL: timeout de 6s por mirror (antes 35s).
+    Con 4 mirrors, el peor caso es 24s, bien por debajo del límite de
+    30s que tiene Render. Así evitamos que gunicorn mate al worker
+    y devuelva el feo "Internal Server Error" en HTML.
+    """
     filtro = CATEGORIAS[categoria]
     if lat is not None:
         area = f"(around:{int(radio_m)},{lat},{lng})"
     else:
         s, o, n, e = BBOX_COCLE
         area = f"({s},{o},{n},{e})"
-    q = f"[out:json][timeout:25];(nwr{filtro}{area};);out center tags 120;"
+    q = f"[out:json][timeout:15];(nwr{filtro}{area};);out center tags 120;"
     ultimo = None
     for url in OVERPASS_URLS:
         try:
-            r = requests.post(url, data={"data": q}, timeout=35,
+            r = requests.post(url, data={"data": q}, timeout=TIMEOUT_OVERPASS,
                               headers={"User-Agent": "RutasCocleTesis/1.0"})
             if r.status_code == 200:
-                # 🔧 PARCHE 3: verificar que sea JSON real (Overpass a veces
-                # devuelve 200 con HTML de mantenimiento o de error)
                 try:
                     return r.json().get("elements", [])
                 except ValueError:
-                    ultimo = f"{url}: respuesta no-JSON (posible mantenimiento)"
+                    ultimo = f"{url}: respuesta no-JSON"
                     print(f"  ⚠ {ultimo}")
                     continue
             ultimo = f"{url}: HTTP {r.status_code}"
+            print(f"  ⚠ {ultimo}")
+        except requests.exceptions.Timeout:
+            ultimo = f"{url}: timeout {TIMEOUT_OVERPASS}s"
             print(f"  ⚠ {ultimo}")
         except Exception as e:
             ultimo = f"{url}: {e}"
@@ -591,10 +599,9 @@ def _normalizar(el, categoria, lat0, lng0):
 
 
 # ============================================================
-# 🔧 PARCHE 2: MANEJADORES GLOBALES DE ERROR
+# 🔧 MANEJADORES GLOBALES DE ERROR
+# Garantiza que TODO error del servidor devuelva JSON (no HTML).
 # ============================================================
-# Esto garantiza que CUALQUIER error no controlado en el servidor devuelva
-# JSON (no HTML). Así el frontend nunca dirá "contenido no-JSON".
 @app.errorhandler(404)
 def error_404(e):
     return jsonify({"exito": False, "error": "Recurso no encontrado"}), 404
@@ -836,6 +843,7 @@ def api_buscar():
                           or q in r["subtipo"].lower()):
                     resultados.append(r)
         if not resultados and errores and len(errores) == len(cats):
+            # 🔧 FIX: 502 con JSON limpio (no 500 con HTML).
             return jsonify({"exito": False, "error": "No se pudo consultar OpenStreetMap ahora. "
                             "Intenta de nuevo en unos segundos.", "detalle": errores}), 502
         resultados.sort(key=lambda r: (r["distancia_km"] if r["distancia_km"] is not None else 0, r["nombre"]))
@@ -871,7 +879,7 @@ def api_fuente_post():
         ATRACTIVOS = obtener_atractivos_por_fuente(nueva)
         return jsonify({"exito": True, "fuente": nueva,
                         "fuente_nombre": "OpenStreetMap" if nueva == "osm" else "Google Maps",
-                        "es_oficial": nueva == FUENTE_OFICIAL, "total_atractivos": len(ATTRACTIVOS)})
+                        "es_oficial": nueva == FUENTE_OFICIAL, "total_atractivos": len(ATRACTIVOS)})
     except Exception as e:
         return jsonify({"exito": False, "error": str(e)}), 500
 
