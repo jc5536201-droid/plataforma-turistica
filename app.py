@@ -2,26 +2,6 @@
 """
 Plataforma de Rutas Turísticas - Provincia de Coclé, Panamá
 Servidor Flask + algoritmo de Dijkstra (+ OSRM para dibujar el trazado).
-
-═══════════════════════════════════════════════════════════════════════════════
-ARQUITECTURA
-═══════════════════════════════════════════════════════════════════════════════
-• CRITERIO OFICIAL DE EVALUACIÓN: DISTANCIA (km). Tiempo y costo se reportan
-  solo como valores de REFERENCIA.
-• Fuente OFICIAL "google": grafo de 29 nodos y 57 aristas medidas en Google Maps
-  (km y minutos), idéntico al del script rutas_cocle_dijkstra.py. Así, la
-  plataforma y el script producen exactamente los mismos resultados.
-• Fuente "osm" (solo análisis de sensibilidad): grafo generado con K vecinos
-  más cercanos + árbol de expansión mínima + hubs + reparación de desvíos, con
-  pesos reales de OSRM sobre coordenadas de OpenStreetMap.
-• Camino mínimo: Dijkstra con cola de prioridad (heapq).
-• Orden de visita de cada día: TSP exacto por permutaciones sobre las
-  distancias mínimas de Dijkstra, saliendo y regresando a Penonomé (nodo 15).
-• Costo (referencia) = distancia × COSTO_POR_KM.
-• Búsqueda de hoteles / restaurantes / atractivos: datos abiertos de
-  OpenStreetMap (Overpass API). No se inventan precios de hoteles.
-• Precios de combustible: Secretaría Nacional de Energía (SNE), actualizados
-  cada 14 días (ver COMBUSTIBLE y combustible.json).
 """
 
 from flask import Flask, render_template, request, jsonify
@@ -47,7 +27,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
 
-# 🔧 FIX: mirrors de Overpass (4 alternativas)
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -55,13 +34,13 @@ OVERPASS_URLS = [
     "https://overpass.osm.jp/api/interpreter",
 ]
 
-COSTO_POR_KM = 0.15              # USD/km (referencia; justificar en la tesis)
+COSTO_POR_KM = 0.15              # USD/km (referencia)
 TIMEOUT = 30
 MAX_RETRIES = 3
 VELOCIDAD_FALLBACK_KMH = 40
 
-# 🔧 FIX: timeout corto por mirror para no exceder el límite de 30s de Render.
-# 4 mirrors × 6s = 24s máximo, seguro por debajo de 30s.
+# >>> FIX IMPORTANTE: timeout corto por mirror de Overpass.
+# 4 mirrors x 6s = 24s máximo, seguro por debajo del límite de Render (30s).
 TIMEOUT_OVERPASS = 6
 
 FACTOR_HOLGURA = float(os.environ.get("FACTOR_HOLGURA", "1.0"))
@@ -77,7 +56,7 @@ BASE = 15  # Penonomé
 CLAVE_PESO = {"distancia": "distancia_km"}
 
 # ============================================================
-# PRECIOS DE COMBUSTIBLE (SNE) - ACTUALIZAR CADA 14 DÍAS
+# PRECIOS DE COMBUSTIBLE (SNE)
 # ============================================================
 COMBUSTIBLE = {
     "vigente_desde": "2026-10-02T06:00:00-05:00",
@@ -165,7 +144,7 @@ ATRACTIVOS_OSM = {i: {**v, "lat": _OSM_COORD[i][0], "lng": _OSM_COORD[i][1]}
                   for i, v in ATRACTIVOS_GOOGLE.items()}
 
 # ============================================================
-# ARISTAS OFICIALES (Google Maps): (origen, destino, km, minutos)
+# ARISTAS OFICIALES (Google Maps)
 # ============================================================
 ARISTAS_GOOGLE = [
     (15, 17, 22.3, 27), (15, 10, 30.1, 33), (15, 16, 50.2, 49), (15, 18, 18.4, 23),
@@ -230,7 +209,7 @@ def peso_arista_fallback(lat1, lng1, lat2, lng2):
 
 
 # ============================================================
-# OSRM (solo geometría y, en modo "osm", pesos)
+# OSRM
 # ============================================================
 
 def obtener_matrices_osrm(atractivos):
@@ -258,7 +237,6 @@ def obtener_ruta_multi_punto(puntos, con_geometria=True):
     params = {"overview": "full" if con_geometria else "false", "geometries": "geojson", "steps": "false"}
     for intento in range(MAX_RETRIES):
         try:
-            # 🔧 FIX: timeout reducido a 10s (antes 60s) para no exceder Render.
             r = requests.get(url, params=params, timeout=10)
             data = r.json()
             if r.status_code == 200 and data.get("code") == "Ok":
@@ -279,7 +257,6 @@ def obtener_ruta_multi_punto(puntos, con_geometria=True):
 # ============================================================
 
 def dijkstra(grafo, origen, criterio="distancia", destino=None):
-    """Dijkstra con heapq. Devuelve (dist, prev)."""
     clave = CLAVE_PESO[criterio]
     ady = grafo["ady"]
     dist = {n: math.inf for n in ady}
@@ -316,7 +293,6 @@ def reconstruir_camino(prev, origen, destino):
 # ============================================================
 
 def construir_grafo_google(atractivos):
-    """Grafo OFICIAL: 57 aristas medidas en Google Maps."""
     ids = sorted(atractivos)
     ady = {n: {} for n in ids}
     pares = set()
@@ -332,7 +308,6 @@ def construir_grafo_google(atractivos):
 
 
 def construir_grafo_osrm(atractivos):
-    """Grafo de SENSIBILIDAD: KNN + MST + hubs + reparación con pesos OSRM."""
     ids = sorted(atractivos)
 
     def hav(a, b):
@@ -435,7 +410,6 @@ def metricas_camino(grafo, camino):
 
 
 def orden_optimo_visita(grafo, destinos, criterio="distancia"):
-    """TSP exacto (permutaciones) sobre distancias mínimas de Dijkstra; base = Penonomé."""
     paradas = []
     for d in destinos:
         if d != BASE and d not in paradas:
@@ -472,7 +446,7 @@ def geometria_camino(atractivos, camino):
 
 
 # ============================================================
-# AUTODIAGNÓSTICO DE DATOS
+# AUTODIAGNÓSTICO
 # ============================================================
 
 def diagnostico_datos():
@@ -520,7 +494,7 @@ def diagnostico_datos():
 # BÚSQUEDA (OpenStreetMap / Overpass)
 # ============================================================
 _CACHE_BUSQ = {}
-_CACHE_TTL = 3600  # 1 hora
+_CACHE_TTL = 3600
 BBOX_COCLE = (8.15, -80.75, 8.75, -80.05)
 
 CATEGORIAS = {
@@ -538,12 +512,6 @@ ETIQUETAS_TIPO = {
 
 
 def _consulta_overpass(categoria, lat=None, lng=None, radio_m=None):
-    """
-    🔧 FIX PRINCIPAL: timeout de 6s por mirror (antes 35s).
-    Con 4 mirrors, el peor caso es 24s, bien por debajo del límite de
-    30s que tiene Render. Así evitamos que gunicorn mate al worker
-    y devuelva el feo "Internal Server Error" en HTML.
-    """
     filtro = CATEGORIAS[categoria]
     if lat is not None:
         area = f"(around:{int(radio_m)},{lat},{lng})"
@@ -554,6 +522,7 @@ def _consulta_overpass(categoria, lat=None, lng=None, radio_m=None):
     ultimo = None
     for url in OVERPASS_URLS:
         try:
+            # >>> FIX: timeout corto (6s) por mirror para no exceder el límite de Render (30s).
             r = requests.post(url, data={"data": q}, timeout=TIMEOUT_OVERPASS,
                               headers={"User-Agent": "RutasCocleTesis/1.0"})
             if r.status_code == 200:
@@ -599,8 +568,7 @@ def _normalizar(el, categoria, lat0, lng0):
 
 
 # ============================================================
-# 🔧 MANEJADORES GLOBALES DE ERROR
-# Garantiza que TODO error del servidor devuelva JSON (no HTML).
+# MANEJADORES GLOBALES DE ERROR (devuelven JSON, no HTML)
 # ============================================================
 @app.errorhandler(404)
 def error_404(e):
@@ -749,7 +717,6 @@ def api_grafo():
 
 @app.route("/api/salud")
 def api_salud():
-    """Autodiagnóstico de datos."""
     return jsonify({"exito": True, **diagnostico_datos(), "fuente_activa": FUENTE_COORDENADAS})
 
 
@@ -767,7 +734,6 @@ def api_dias():
 
 @app.route("/api/sitios")
 def api_sitios():
-    """Fichas detalladas de los 29 sitios."""
     return jsonify({str(n): ficha_completa(n, d) for n, d in ATRACTIVOS.items()})
 
 
@@ -807,10 +773,6 @@ def api_combustible():
 
 @app.route("/api/buscar")
 def api_buscar():
-    """
-    Parámetros: tipo=hotel|restaurante|atraccion|todos, q=texto, cerca=<id nodo>, radio=<km>
-    Fuente: OpenStreetMap (Overpass). No incluye precios.
-    """
     try:
         tipo = request.args.get("tipo", "todos")
         q = (request.args.get("q") or "").strip().lower()[:60]
@@ -843,7 +805,6 @@ def api_buscar():
                           or q in r["subtipo"].lower()):
                     resultados.append(r)
         if not resultados and errores and len(errores) == len(cats):
-            # 🔧 FIX: 502 con JSON limpio (no 500 con HTML).
             return jsonify({"exito": False, "error": "No se pudo consultar OpenStreetMap ahora. "
                             "Intenta de nuevo en unos segundos.", "detalle": errores}), 502
         resultados.sort(key=lambda r: (r["distancia_km"] if r["distancia_km"] is not None else 0, r["nombre"]))
